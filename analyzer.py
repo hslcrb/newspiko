@@ -18,7 +18,8 @@ class NewsAnalyzer:
         if not comments:
             return "분석할 댓글이 없습니다."
 
-        comment_text = "\n".join([f"- {c['text']}" for c in comments[:20]])
+        # 대량 댓글 중 상위 100개 발췌 (토큰 제한 고려)
+        comment_text = "\n".join([f"- {c['text']}" for c in comments[:100]])
         
         prompt = f"""
 당신은 대한민국 뉴스 및 여론 분석 전문가입니다. 다음 뉴스 기사와 댓글들을 분석하여 여론의 반응과 여론조작 의심 여부를 보고하십시오.

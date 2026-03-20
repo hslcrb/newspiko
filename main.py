@@ -30,8 +30,8 @@ class ModernNewsApp(QMainWindow):
         self.analyzer = NewsAnalyzer(api_key=self.config_mgr.get("groq_api_key"))
         self.current_news_list = []
         
-        self.setWindowTitle("NAVER News Insight v1.0")
-        self.resize(1300, 850)
+        self.setWindowTitle("Newspiko - 고성능 여론 분석 에이전트")
+        self.resize(1400, 900)
         self.init_ui()
         self.apply_styles()
         self.load_news()
@@ -40,8 +40,8 @@ class ModernNewsApp(QMainWindow):
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
         main_layout = QHBoxLayout(main_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
 
         # 사이드바
         self.sidebar = QFrame()
@@ -49,12 +49,12 @@ class ModernNewsApp(QMainWindow):
         sidebar_layout = QVBoxLayout(self.sidebar)
         
         header_layout = QHBoxLayout()
-        sidebar_title = QLabel("실시간 랭킹 뉴스")
+        sidebar_title = QLabel("Newspiko Feed")
         sidebar_title.setObjectName("sidebarTitle")
         header_layout.addWidget(sidebar_title)
         
-        self.api_btn = QPushButton("API 설정")
-        self.api_btn.setFixedWidth(80)
+        self.api_btn = QPushButton("API")
+        self.api_btn.setFixedWidth(60)
         self.api_btn.clicked.connect(self.set_api_key)
         header_layout.addWidget(self.api_btn)
         sidebar_layout.addLayout(header_layout)
@@ -63,12 +63,12 @@ class ModernNewsApp(QMainWindow):
         self.news_list_widget.itemClicked.connect(self.on_news_selected)
         sidebar_layout.addWidget(self.news_list_widget)
         
-        self.refresh_btn = QPushButton("뉴스 새로고침")
+        self.refresh_btn = QPushButton("피드 새로고침")
         self.refresh_btn.clicked.connect(self.load_news)
         sidebar_layout.addWidget(self.refresh_btn)
 
-        # 본문 및 분석 영역
-        splitter = QSplitter(Qt.Orientation.Vertical)
+        # 본문 및 상세 영역 (3분할 스플리터)
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # 1. 기사 본문 영역
         article_frame = QFrame()
@@ -83,20 +83,35 @@ class ModernNewsApp(QMainWindow):
         self.article_view.setObjectName("articleView")
         article_layout.addWidget(self.article_view)
         
-        splitter.addWidget(article_frame)
+        main_splitter.addWidget(article_frame)
 
-        # 2. 분석 결과 영역
+        # 2. 오른쪽 영역 (댓글 + 분석)
+        right_splitter = QSplitter(Qt.Orientation.Vertical)
+
+        # 댓글 리스트 영역
+        comment_frame = QFrame()
+        comment_layout = QVBoxLayout(comment_frame)
+        comment_title = QLabel("수집된 전체 댓글")
+        comment_title.setObjectName("commentTitle")
+        comment_layout.addWidget(comment_title)
+        
+        self.comment_list_widget = QListWidget()
+        self.comment_list_widget.setObjectName("commentList")
+        comment_layout.addWidget(self.comment_list_widget)
+        right_splitter.addWidget(comment_frame)
+
+        # 분석 결과 영역
         analysis_frame = QFrame()
         analysis_layout = QVBoxLayout(analysis_frame)
         
         analysis_header = QHBoxLayout()
-        analysis_label = QLabel("AI 여론 분석 및 조작 탐지")
+        analysis_label = QLabel("AI 여론 통찰")
         analysis_label.setObjectName("analysisLabel")
         analysis_header.addWidget(analysis_label)
         
         self.progress = QProgressBar()
         self.progress.setVisible(False)
-        self.progress.setMaximum(0) # Busy indicator
+        self.progress.setMaximum(0)
         analysis_header.addWidget(self.progress)
         analysis_layout.addLayout(analysis_header)
         
@@ -105,28 +120,62 @@ class ModernNewsApp(QMainWindow):
         self.analysis_view.setObjectName("analysisView")
         analysis_layout.addWidget(self.analysis_view)
         
-        splitter.addWidget(analysis_frame)
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 3)
+        right_splitter.addWidget(analysis_frame)
+        main_splitter.addWidget(right_splitter)
 
         main_layout.addWidget(self.sidebar)
-        main_layout.addWidget(splitter)
+        main_layout.addWidget(main_splitter)
 
     def apply_styles(self):
         self.setStyleSheet("""
-            QMainWindow, QWidget#main_widget { background-color: #0f172a; }
-            QFrame { background-color: #1e293b; border: none; border-radius: 8px; margin: 5px; }
-            #sidebarTitle { color: #38bdf8; font-size: 18px; font-weight: bold; }
-            #analysisLabel { color: #10b981; font-size: 18px; font-weight: bold; }
-            #articleTitle { color: #f8fafc; font-size: 20px; font-weight: bold; padding: 10px; }
-            QListWidget { background-color: transparent; border: 1px solid #334155; color: #94a3b8; font-size: 14px; border-radius: 5px; }
-            QListWidget::item { padding: 15px; border-bottom: 1px solid #334155; }
-            QListWidget::item:selected { background-color: #334155; color: #38bdf8; border-left: 5px solid #38bdf8; }
-            QTextEdit { background-color: #111827; color: #e2e8f0; border: 1px solid #334155; font-size: 15px; border-radius: 5px; }
-            QPushButton { background-color: #38bdf8; color: #0f172a; border-radius: 5px; padding: 10px; font-weight: bold; }
-            QPushButton:hover { background-color: #7dd3fc; }
-            QProgressBar { height: 4px; border: none; background: #334155; }
-            QProgressBar::chunk { background: #38bdf8; }
+            QMainWindow, QWidget { background-color: #0b0f19; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
+            QFrame { background-color: #161e2b; border: 1px solid #232d3d; border-radius: 12px; }
+            #sidebarTitle { color: #60a5fa; font-size: 20px; font-weight: 900; letter-spacing: -0.5px; padding: 5px; }
+            #commentTitle, #analysisLabel { color: #34d399; font-size: 16px; font-weight: bold; padding: 5px; }
+            #articleTitle { color: #f8fafc; font-size: 24px; font-weight: 800; line-height: 1.4; padding: 10px; margin-bottom: 5px; }
+            
+            QListWidget { background-color: transparent; border: none; color: #94a3b8; outline: none; }
+            QListWidget::item { padding: 18px; border-bottom: 1px solid #232d3d; border-radius: 0px; }
+            QListWidget::item:selected { background-color: #1e293b; color: #60a5fa; border-left: 4px solid #60a5fa; }
+            
+            #commentList::item { padding: 12px; background-color: #0f172a; border-radius: 8px; margin-bottom: 6px; border: 1px solid #1e293b; }
+            
+            QTextEdit { 
+                background-color: #0f172a; 
+                color: #cbd5e1; 
+                border: none; 
+                font-size: 16px; 
+                line-height: 1.8; 
+                padding: 15px;
+                selection-background-color: #2563eb;
+            }
+            
+            QPushButton { 
+                background-color: #2563eb; 
+                color: white; 
+                border-radius: 8px; 
+                padding: 12px; 
+                font-weight: bold; 
+                font-size: 14px;
+            }
+            QPushButton:hover { background-color: #3b82f6; }
+            
+            QProgressBar { height: 3px; border: none; background: #1e293b; }
+            QProgressBar::chunk { background: #60a5fa; }
+            
+            QScrollBar:vertical {
+                border: none;
+                background: #0f172a;
+                width: 8px;
+                margin: 0px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #334155;
+                min-height: 20px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover { background: #475569; }
         """)
 
     def set_api_key(self):
@@ -153,22 +202,40 @@ class ModernNewsApp(QMainWindow):
         news = self.current_news_list[idx]
         
         self.title_label.setText(news['title'])
-        self.article_view.setText("데이터 수집 중...")
+        self.article_view.setHtml("<p style='color: #60a5fa;'>데이터 수집 중...</p>")
         self.analysis_view.setText("기사를 선택하면 분석이 시작됩니다.")
+        self.comment_list_widget.clear()
         
-        # 상세 데이터 수집 (본문 + 댓글)
+        # 상세 데이터 수집
         details = self.crawler.get_article_details(news['link'])
-        self.article_view.setText(details['content'] or "본문을 가져올 수 없습니다.")
+        # 기사 본문 프리티 프린트 (HTML 적용)
+        formatted_content = details['content'].replace("\n", "<br>")
+        self.article_view.setHtml(f"""
+            <div style='line-height: 1.8; font-size: 16px; color: #cbd5e1;'>
+                {formatted_content}
+            </div>
+        """)
         
+        self.statusBar().showMessage("댓글 수집 중...")
         comments = self.crawler.get_comments(details['oid'], details['aid'])
-        
+        self.statusBar().showMessage(f"댓글 {len(comments)}개 수집 완료")
+
+        # 댓글 리스트 프리티 프린트
+        for c in comments:
+            comment_item = QListWidgetItem()
+            self.comment_list_widget.addItem(comment_item)
+            
+            # 사용자 정의 위젯 대신 텍스트 서식 활용 (가독성 최우선)
+            display_text = f"👤 {c['user']} | 🕒 {c['time']}\n{c['text']}\n👍 {c['good']}  👎 {c['bad']}"
+            comment_item.setText(display_text)
+            comment_item.setToolTip(c['text'])
+
         if not self.analyzer.api_key:
-            self.analysis_view.setText("Groq API 키가 설정되지 않았습니다. 우측 상단의 'API 설정' 버튼을 이용해 주세요.")
+            self.analysis_view.setText("Groq API 키가 설정되지 않았습니다.")
             return
 
-        # 분석 스레드 실행
         self.progress.setVisible(True)
-        self.analysis_view.setText("AI 분석 엔진 가동 중... 잠시만 기다려 주세요.")
+        self.analysis_view.setText("Newspiko AI 분석 엔진 가동 중...")
         
         self.thread = AnalysisThread(self.analyzer, {'title': news['title'], 'content': details['content']}, comments)
         self.thread.finished.connect(self.on_analysis_finished)

@@ -65,19 +65,18 @@ class NaverNewsCrawler:
             print(f"Crawler Error (Details): {e}")
             return {'content': "", 'oid': "", 'aid': ""}
 
-    def get_comments(self, oid, aid, count=30):
+    def get_comments(self, oid, aid, max_comments=500):
         if not oid or not aid: return []
         
-        # 추천순(FAVORITE), 최신순(NEWLY) 등 다양한 정렬 시도 가능
         url = "https://apis.naver.com/comment/comment/get/v2/jsonp/commentList.json"
         params = {
             "ticket": "news",
-            "templateId": "default", # 'default'가 가장 범용적
+            "templateId": "default",
             "pool": "g_news",
             "lang": "ko",
             "country": "KR",
             "objectId": f"news{oid},{aid}",
-            "pageSize": count,
+            "pageSize": 100,
             "page": 1,
             "sort": "FAVORITE"
         }
@@ -85,28 +84,51 @@ class NaverNewsCrawler:
         headers = self.headers.copy()
         headers['Referer'] = f'https://n.news.naver.com/article/comment/{oid}/{aid}'
         
+        all_comments = []
         try:
-            # 여러 templateId 시도 (정치 섹션 등은 다를 수 있음)
-            templates = ["default", "default_politics", "default_society"]
+            templates = ["default", "default_politics", "default_society", "default_economy"]
+            found_template = None
+            
+            # 1. 적절한 템플릿 찾기
             for tid in templates:
                 params["templateId"] = tid
                 response = requests.get(url, params=params, headers=headers, timeout=10)
                 json_text = re.sub(r'^[^\({]+\(', '', response.text)
                 json_text = re.sub(r'\);?\s*$', '', json_text)
                 data = json.loads(json_text)
-                
                 if 'result' in data and data['result'].get('commentList'):
-                    comments = []
-                    for c in data['result']['commentList']:
-                        comments.append({
-                            'user': c.get('userName', '익명'),
-                            'text': c.get('contents', ''),
-                            'good': c.get('sympathyCount', 0),
-                            'bad': c.get('antisympathyCount', 0),
-                            'time': c.get('regTime', '')
-                        })
-                    return comments
-            return []
+                    found_template = tid
+                    break
+            
+            if not found_template: return []
+            
+            # 2. 페이징 처리하여 수집
+            params["templateId"] = found_template
+            page = 1
+            while len(all_comments) < max_comments:
+                params["page"] = page
+                response = requests.get(url, params=params, headers=headers, timeout=10)
+                json_text = re.sub(r'^[^\({]+\(', '', response.text)
+                json_text = re.sub(r'\);?\s*$', '', json_text)
+                data = json.loads(json_text)
+                
+                comment_list = data.get('result', {}).get('commentList', [])
+                if not comment_list: break
+                
+                for c in comment_list:
+                    all_comments.append({
+                        'user': c.get('userName', '익명'),
+                        'text': c.get('contents', ''),
+                        'good': c.get('sympathyCount', 0),
+                        'bad': c.get('antisympathyCount', 0),
+                        'time': c.get('regTime', '')
+                    })
+                
+                if len(comment_list) < 100: break # 마지막 페이지
+                page += 1
+                time.sleep(0.1) # 서버 부하 방지
+                
+            return all_comments
         except Exception as e:
             print(f"Crawler Error (Comments): {e}")
-            return []
+            return all_comments
