@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import patch
-from crawler import NaverNewsCrawler
-from analyzer import NewsAnalyzer
-from config_manager import ConfigManager
+from src.crawler import NaverNewsCrawler
+from src.analyzer import NewsAnalyzer
+from src.config_manager import ConfigManager
 
 def test_full_pipeline_mock():
     # 1. Config 로드

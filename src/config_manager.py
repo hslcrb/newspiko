@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 class ConfigManager:
-    def __init__(self, config_path="config.dat", key_path=".secret.key"):
+    def __init__(self, config_path="../config.dat", key_path="../.secret.key"):
         self.config_path = config_path
         self.key_path = key_path
         self.key = self._load_or_create_key()
@@ -26,6 +26,18 @@ class ConfigManager:
                 import ctypes
                 ctypes.windll.kernel32.SetFileAttributesW(self.key_path, 2)
             return key
+
+    def save_config(self, config_dict=None):
+        import zlib
+        if config_dict:
+            self.config = config_dict
+        
+        # 압축 후 암호화
+        data = json.dumps(self.config).encode('utf-8')
+        compressed_data = zlib.compress(data)
+        encrypted_data = self.fernet.encrypt(compressed_data)
+        with open(self.config_path, "wb") as f:
+            f.write(encrypted_data)
 
     def load_config(self):
         import zlib
@@ -50,18 +62,6 @@ class ConfigManager:
         }
         self.save_config(default)
         return default
-
-    def save_config(self, config_dict=None):
-        import zlib
-        if config_dict:
-            self.config = config_dict
-        
-        # 압축 후 암호화
-        data = json.dumps(self.config).encode('utf-8')
-        compressed_data = zlib.compress(data)
-        encrypted_data = self.fernet.encrypt(compressed_data)
-        with open(self.config_path, "wb") as f:
-            f.write(encrypted_data)
 
     def get(self, key, default=None):
         return self.config.get(key, default)

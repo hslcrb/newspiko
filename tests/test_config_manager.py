@@ -1,6 +1,6 @@
 import os
 import pytest
-from config_manager import ConfigManager
+from src.config_manager import ConfigManager
 
 def test_config_encryption_decryption():
     config_path = "test_config.dat"

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from analyzer import NewsAnalyzer
+from src.analyzer import NewsAnalyzer
 
 def test_analyzer_no_key():
     with patch.dict('os.environ', {'GROQ_API_KEY': ''}):
