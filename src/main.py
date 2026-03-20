@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QFrame, QSplitter, QProgressBar,
                              QInputDialog, QMessageBox, QListWidgetItem)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from styles import get_theme_css
 from crawler import NaverNewsCrawler
 from analyzer import NewsAnalyzer
 from config_manager import ConfigManager
@@ -25,10 +26,11 @@ class AnalysisThread(QThread):
 class ModernNewsApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.config_mgr = ConfigManager()
+        self.config_mgr = ConfigManager(config_path="../config.dat", key_path="../.secret.key")
         self.crawler = NaverNewsCrawler()
         self.analyzer = NewsAnalyzer(api_key=self.config_mgr.get("groq_api_key"))
         self.current_news_list = []
+        self.theme = self.config_mgr.get("theme", "dark")
         
         self.setWindowTitle("Newspiko - 고성능 여론 분석 에이전트")
         self.resize(1400, 900)
@@ -54,9 +56,16 @@ class ModernNewsApp(QMainWindow):
         header_layout.addWidget(sidebar_title)
         
         self.api_btn = QPushButton("API")
-        self.api_btn.setFixedWidth(60)
+        self.api_btn.setFixedWidth(50)
         self.api_btn.clicked.connect(self.set_api_key)
         header_layout.addWidget(self.api_btn)
+        
+        self.theme_btn = QPushButton("◑")
+        self.theme_btn.setFixedWidth(40)
+        self.theme_btn.setObjectName("themeToggle")
+        self.theme_btn.clicked.connect(self.toggle_theme)
+        header_layout.addWidget(self.theme_btn)
+        
         sidebar_layout.addLayout(header_layout)
 
         self.news_list_widget = QListWidget()
@@ -127,56 +136,12 @@ class ModernNewsApp(QMainWindow):
         main_layout.addWidget(main_splitter)
 
     def apply_styles(self):
-        self.setStyleSheet("""
-            QMainWindow, QWidget { background-color: #0b0f19; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; }
-            QFrame { background-color: #161e2b; border: 1px solid #232d3d; border-radius: 12px; }
-            #sidebarTitle { color: #60a5fa; font-size: 20px; font-weight: 900; letter-spacing: -0.5px; padding: 5px; }
-            #commentTitle, #analysisLabel { color: #34d399; font-size: 16px; font-weight: bold; padding: 5px; }
-            #articleTitle { color: #f8fafc; font-size: 24px; font-weight: 800; line-height: 1.4; padding: 10px; margin-bottom: 5px; }
-            
-            QListWidget { background-color: transparent; border: none; color: #94a3b8; outline: none; }
-            QListWidget::item { padding: 18px; border-bottom: 1px solid #232d3d; border-radius: 0px; }
-            QListWidget::item:selected { background-color: #1e293b; color: #60a5fa; border-left: 4px solid #60a5fa; }
-            
-            #commentList::item { padding: 12px; background-color: #0f172a; border-radius: 8px; margin-bottom: 6px; border: 1px solid #1e293b; }
-            
-            QTextEdit { 
-                background-color: #0f172a; 
-                color: #cbd5e1; 
-                border: none; 
-                font-size: 16px; 
-                line-height: 1.8; 
-                padding: 15px;
-                selection-background-color: #2563eb;
-            }
-            
-            QPushButton { 
-                background-color: #2563eb; 
-                color: white; 
-                border-radius: 8px; 
-                padding: 12px; 
-                font-weight: bold; 
-                font-size: 14px;
-            }
-            QPushButton:hover { background-color: #3b82f6; }
-            
-            QProgressBar { height: 3px; border: none; background: #1e293b; }
-            QProgressBar::chunk { background: #60a5fa; }
-            
-            QScrollBar:vertical {
-                border: none;
-                background: #0f172a;
-                width: 8px;
-                margin: 0px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical {
-                background: #334155;
-                min-height: 20px;
-                border-radius: 4px;
-            }
-            QScrollBar::handle:vertical:hover { background: #475569; }
-        """)
+        self.setStyleSheet(get_theme_css(self.theme))
+
+    def toggle_theme(self):
+        self.theme = "light" if self.theme == "dark" else "dark"
+        self.config_mgr.set("theme", self.theme)
+        self.apply_styles()
 
     def set_api_key(self):
         current_key = self.config_mgr.get("groq_api_key", "")

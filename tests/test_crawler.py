@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from crawler import NaverNewsCrawler
+from src.crawler import NaverNewsCrawler
 
 @pytest.fixture
 def crawler():
