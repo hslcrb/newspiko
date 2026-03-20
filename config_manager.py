@@ -27,18 +27,6 @@ class ConfigManager:
                 ctypes.windll.kernel32.SetFileAttributesW(self.key_path, 2)
             return key
 
-    def save_config(self, config_dict=None):
-        import zlib
-        if config_dict:
-            self.config = config_dict
-        
-        # 압축 후 암호화
-        data = json.dumps(self.config).encode('utf-8')
-        compressed_data = zlib.compress(data)
-        encrypted_data = self.fernet.encrypt(compressed_data)
-        with open(self.config_path, "wb") as f:
-            f.write(encrypted_data)
-
     def load_config(self):
         import zlib
         if not os.path.exists(self.config_path):
@@ -53,6 +41,27 @@ class ConfigManager:
                 return json.loads(decompressed_data.decode('utf-8'))
         except Exception:
             return self._create_default_config()
+
+    def _create_default_config(self):
+        default = {
+            "groq_api_key": "",
+            "theme": "dark",
+            "last_section": 100
+        }
+        self.save_config(default)
+        return default
+
+    def save_config(self, config_dict=None):
+        import zlib
+        if config_dict:
+            self.config = config_dict
+        
+        # 압축 후 암호화
+        data = json.dumps(self.config).encode('utf-8')
+        compressed_data = zlib.compress(data)
+        encrypted_data = self.fernet.encrypt(compressed_data)
+        with open(self.config_path, "wb") as f:
+            f.write(encrypted_data)
 
     def get(self, key, default=None):
         return self.config.get(key, default)
