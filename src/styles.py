@@ -15,17 +15,18 @@ def get_theme_css(theme="dark"):
         }
     else:
         vars = {
-            "--color-bg": "#f8fafc",
+            "--color-bg": "#f1f5f9",
             "--color-surface": "#ffffff",
-            "--color-surface-low": "#f1f5f9",
-            "--color-border": "#e2e8f0",
+            "--color-surface-low": "#e2e8f0",
+            "--color-border": "#cbd5e1",
             "--color-primary": "#2563eb",
             "--color-primary-hover": "#1d4ed8",
-            "--color-text": "#0f172a",
-            "--color-text-dim": "#64748b",
-            "--color-accent": "#10b981",
+            "--color-text": "#000000",
+            "--color-text-dim": "#334155",
+            "--color-accent": "#059669",
+            "--color-agentic": "#8b5cf6",
             "--color-scroll-bg": "#f1f5f9",
-            "--color-scroll-handle": "#cbd5e1"
+            "--color-scroll-handle": "#94a3b8"
         }
 
     # Qt QSS에서 var() 사용을 흉내내기 위해 동적 주입 (Qt natively supports minimal variables since v6, but manual injection is safer for full control)
@@ -68,6 +69,19 @@ def get_theme_css(theme="dark"):
     }}
     QPushButton:hover {{ background-color: {vars["--color-primary-hover"]}; }}
     
+    #agenticHeader {{
+        background-color: {vars["--color-surface-low"]};
+        border-bottom: 2px solid {vars.get("--color-agentic", "#8b5cf6")};
+        border-radius: 0px;
+        padding: 10px;
+        margin-bottom: 5px;
+    }}
+    #agenticStatus {{ color: {vars.get("--color-agentic", "#8b5cf6")}; font-weight: bold; font-size: 13px; }}
+    
+    QCheckBox {{ color: {vars["--color-text"]}; spacing: 8px; font-weight: bold; }}
+    QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 4px; border: 1px solid {vars["--color-border"]}; }}
+    QCheckBox::indicator:checked {{ background-color: {vars.get("--color-agentic", "#8b5cf6")}; border: 1px solid {vars.get("--color-agentic", "#8b5cf6")}; }}
+
     #themeToggle {{
         background-color: {vars["--color-surface"]};
         color: {vars["--color-text"]};
