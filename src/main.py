@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QListWidget, QTextEdit, 
                              QPushButton, QFrame, QSplitter, QProgressBar,
-                             QInputDialog, QMessageBox, QListWidgetItem)
+                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from styles import get_theme_css
 from crawler import NaverNewsCrawler
@@ -31,6 +31,7 @@ class ModernNewsApp(QMainWindow):
         self.analyzer = NewsAnalyzer(api_key=self.config_mgr.get("groq_api_key"))
         self.current_news_list = []
         self.theme = self.config_mgr.get("theme", "dark")
+        self.agentic_active = self.config_mgr.get("agentic_active", False)
         
         self.setWindowTitle("Newspiko - 고성능 여론 분석 에이전트")
         self.resize(1400, 900)
@@ -50,6 +51,7 @@ class ModernNewsApp(QMainWindow):
         self.sidebar.setFixedWidth(380)
         sidebar_layout = QVBoxLayout(self.sidebar)
         
+        # 상단 헤더
         header_layout = QHBoxLayout()
         sidebar_title = QLabel("Newspiko Feed")
         sidebar_title.setObjectName("sidebarTitle")
@@ -65,8 +67,25 @@ class ModernNewsApp(QMainWindow):
         self.theme_btn.setObjectName("themeToggle")
         self.theme_btn.clicked.connect(self.toggle_theme)
         header_layout.addWidget(self.theme_btn)
-        
         sidebar_layout.addLayout(header_layout)
+
+        # 에이전틱 모드 패널
+        agentic_panel = QFrame()
+        agentic_panel.setObjectName("agenticHeader")
+        agentic_layout = QVBoxLayout(agentic_panel)
+        
+        self.agentic_cb = QCheckBox("Agentic Mode")
+        self.agentic_cb.setChecked(self.agentic_active)
+        self.agentic_cb.toggled.connect(self.toggle_agentic)
+        agentic_layout.addWidget(self.agentic_cb)
+        
+        self.agentic_status = QLabel("사용자 수동 제어 모드")
+        self.agentic_status.setObjectName("agenticStatus")
+        if self.agentic_active:
+            self.agentic_status.setText("● AI 자동 분석 활성화됨")
+        agentic_layout.addWidget(self.agentic_status)
+        
+        sidebar_layout.addWidget(agentic_panel)
 
         self.news_list_widget = QListWidget()
         self.news_list_widget.itemClicked.connect(self.on_news_selected)
@@ -138,6 +157,17 @@ class ModernNewsApp(QMainWindow):
     def apply_styles(self):
         self.setStyleSheet(get_theme_css(self.theme))
 
+    def toggle_agentic(self, checked):
+        self.agentic_active = checked
+        self.config_mgr.set("agentic_active", checked)
+        if checked:
+            self.agentic_status.setText("● AI 자동 분석 활성화됨")
+            if self.news_list_widget.count() > 0:
+                self.news_list_widget.setCurrentRow(0)
+                self.on_news_selected(self.news_list_widget.item(0))
+        else:
+            self.agentic_status.setText("사용자 수동 제어 모드")
+
     def toggle_theme(self):
         self.theme = "light" if self.theme == "dark" else "dark"
         self.config_mgr.set("theme", self.theme)
@@ -161,6 +191,11 @@ class ModernNewsApp(QMainWindow):
             self.news_list_widget.addItem(item_text)
         
         self.statusBar().showMessage(f"총 {len(self.current_news_list)}개의 기사를 로드했습니다.")
+        
+        # 에이전틱 모드일 경우 첫 번째 기사 자동 선택/분석
+        if self.agentic_active and self.news_list_widget.count() > 0:
+            self.news_list_widget.setCurrentRow(0)
+            self.on_news_selected(self.news_list_widget.item(0))
 
     def on_news_selected(self, item):
         idx = self.news_list_widget.row(item)
@@ -173,10 +208,14 @@ class ModernNewsApp(QMainWindow):
         
         # 상세 데이터 수집
         details = self.crawler.get_article_details(news['link'])
+        
+        # 테마에 따른 기사 텍스트 색상 결정 (라이트 모드일 때 검정색)
+        text_color = "#000000" if self.theme == "light" else "#cbd5e1"
+        
         # 기사 본문 프리티 프린트 (HTML 적용)
         formatted_content = details['content'].replace("\n", "<br>")
         self.article_view.setHtml(f"""
-            <div style='line-height: 1.8; font-size: 16px; color: #cbd5e1;'>
+            <div style='line-height: 1.8; font-size: 16px; color: {text_color};'>
                 {formatted_content}
             </div>
         """)
@@ -190,10 +229,13 @@ class ModernNewsApp(QMainWindow):
             comment_item = QListWidgetItem()
             self.comment_list_widget.addItem(comment_item)
             
-            # 사용자 정의 위젯 대신 텍스트 서식 활용 (가독성 최우선)
             display_text = f"👤 {c['user']} | 🕒 {c['time']}\n{c['text']}\n👍 {c['good']}  👎 {c['bad']}"
             comment_item.setText(display_text)
-            comment_item.setToolTip(c['text'])
+            comment_item.setToolTip("클릭하여 이 댓글에 대한 상세 분석을 수행합니다.")
+            comment_item.setData(Qt.ItemDataRole.UserRole, c['text']) # 원본 텍스트 저장
+
+        # 댓글 클릭 이벤트 연결 (기존에 연결되어 있지 않았다면 추가)
+        self.comment_list_widget.itemDoubleClicked.connect(self.on_comment_double_clicked)
 
         if not self.analyzer.api_key:
             self.analysis_view.setText("Groq API 키가 설정되지 않았습니다.")
@@ -205,6 +247,12 @@ class ModernNewsApp(QMainWindow):
         self.thread = AnalysisThread(self.analyzer, {'title': news['title'], 'content': details['content']}, comments)
         self.thread.finished.connect(self.on_analysis_finished)
         self.thread.start()
+
+    def on_comment_double_clicked(self, item):
+        comment_text = item.data(Qt.ItemDataRole.UserRole)
+        # 해당 댓글에 대한 빠른 단독 분석 또는 강조 기능 (간단하게 상태바 표시)
+        self.statusBar().showMessage(f"댓글 분석 선택됨: {comment_text[:20]}...")
+        QMessageBox.information(self, "댓글 상세", f"선택한 댓글 원문:\n\n{comment_text}")
 
     def on_analysis_finished(self, result):
         self.progress.setVisible(False)
