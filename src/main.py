@@ -458,7 +458,21 @@ class ModernNewsApp(QMainWindow):
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
         result_text = data["text"]
+        logs = data.get("logs", [])
         
+        # 에러나 재시도가 포함된 로그가 있다면 상단에 요약 표시
+        log_header = ""
+        if any("[AI-" in log for log in logs):
+            log_header = "### 📋 분석 실행 로그\n"
+            for log in logs:
+                if "[AI-ERROR]" in log:
+                    log_header += f"- ❌ {log}\n"
+                elif "[AI-RETRY]" in log:
+                    log_header += f"- 🔄 {log}\n"
+                else:
+                    log_header += f"- {log}\n"
+            log_header += "\n---\n\n"
+
         # 키워드 파싱 및 표시
         import re
         kw_match = re.search(r'\[KEYWORDS:\s*(.*?)\]', result_text)
@@ -489,7 +503,7 @@ class ModernNewsApp(QMainWindow):
         else:
             self.keyword_frame.setVisible(False)
 
-        self.analysis_view.setMarkdown(result_text)
+        self.analysis_view.setMarkdown(log_header + result_text)
         
         # 감성 시각화 업데이트
         sent = data["sentiment"]
