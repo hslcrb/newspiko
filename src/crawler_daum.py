@@ -96,31 +96,43 @@ class DaumNewsCrawler:
         # 다음(Daum) 뉴스는 'Alex' 댓글 시스템을 사용합니다.
         if not article_id: return []
         
-        url = f"https://comment.daum.net/apis/v1/posts/{article_id}/comments"
-        params = {
-            "limit": min(max_comments, 100),
-            "offset": 0,
-            "order": "RECOMMEND"
-        }
+        # Alex 전용 헤더 추가 (필수)
+        headers = self.headers.copy()
+        headers.update({
+            'Referer': f'https://v.daum.net/v/{article_id}',
+            'Accept': 'application/json'
+        })
         
-        try:
-            response = self.session.get(url, params=params, headers=self.headers, timeout=10)
-            if response.status_code != 200:
-                # Daum은 때로 post_id를 따로 찾아야 할 수도 있음 (article_id와 다를 때)
-                return []
+        url = f"https://comment.daum.net/apis/v1/posts/{article_id}/comments"
+        
+        all_comments = []
+        sort_types = ["RECOMMEND", "LATEST"] # Daum은 LATEST 사용
+        
+        for sort in sort_types:
+            if all_comments: break
+            params = {
+                "limit": min(max_comments, 100),
+                "offset": 0,
+                "order": sort
+            }
+            try:
+                response = self.session.get(url, params=params, headers=headers, timeout=10)
+                if response.status_code != 200: continue
                 
-            data = response.json()
-            comments = []
-            for c in data:
-                user_info = c.get('user', {})
-                comments.append({
-                    'user': user_info.get('displayName', '익명'),
-                    'text': c.get('content', ''),
-                    'good': c.get('likeCount', 0),
-                    'bad': c.get('dislikeCount', 0),
-                    'time': c.get('createdAt', '')[:10]
-                })
-            return comments
-        except Exception as e:
-            print(f"Daum Crawler Error (Comments): {e}")
-            return []
+                data = response.json()
+                if not data: continue
+                
+                for c in data:
+                    user_info = c.get('user', {})
+                    all_comments.append({
+                        'user': user_info.get('displayName', '익명'),
+                        'text': c.get('content', ''),
+                        'good': c.get('likeCount', 0),
+                        'bad': c.get('dislikeCount', 0),
+                        'time': c.get('createdAt', '')[:10]
+                    })
+                if all_comments: break # 수집 성공 시 중단
+            except Exception as e:
+                print(f"Daum API Trial Error ({sort}): {e}")
+                
+        return all_comments
