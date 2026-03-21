@@ -2,38 +2,46 @@ import requests
 import re
 import json
 
-headers = {'User-Agent': 'Mozilla/5.0'}
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+}
 
-def check_naver(url):
-    print(f"\n--- Checking Naver: {url} ---")
-    r = requests.get(url, headers=headers)
-    # objectId 찾기
-    oid_match = re.search(r'\"objectId\":\"(.*?)\"', r.text)
-    if oid_match:
-        print(f"Found objectId: {oid_match.group(1)}")
-    else:
-        # 다른 형식 시도
-        oid_match = re.search(r'objectId:\"(.*?)\"', r.text)
-        if oid_match:
-            print(f"Found objectId (alt): {oid_match.group(1)}")
-        else:
-            print("No objectId found in HTML")
+def analyze_naver(url):
+    print(f"Analyzing Naver: {url}")
+    res = requests.get(url, headers=headers)
+    html = res.text
+    
+    # 1. oid, aid 찾기
+    oid = re.search(r'oid=(\d+)', url) or re.search(r'article/(\d+)/', url)
+    aid = re.search(r'aid=(\d+)', url) or re.search(r'article/\d+/(\d+)', url)
+    print(f"OID: {oid.group(1) if oid else 'N/A'}, AID: {aid.group(1) if aid else 'N/A'}")
+    
+    # 2. 모든 ticket, pool, objectId 패턴 추출
+    tickets = re.findall(r'\"ticket\"\s*:\s*\"([^\"]+)\"', html)
+    pools = re.findall(r'\"pool\"\s*:\s*\"([^\"]+)\"', html)
+    template_ids = re.findall(r'\"templateId\"\s*:\s*\"([^\"]+)\"', html)
+    object_ids = re.findall(r'\"objectId\"\s*:\s*\"([^\"]+)\"', html)
+    
+    print(f"All Tickets found: {list(set(tickets))}")
+    print(f"All Pools found: {list(set(pools))}")
+    print(f"All TemplateIds found: {list(set(template_ids))}")
+    print(f"All ObjectIds found: {list(set(object_ids))}")
+    
+    # script 내부의 g_news 등 검색
+    if "g_news" in html: print("Found 'g_news' in HTML")
+    if "commentList" in html: print("Found 'commentList' in HTML")
 
-def check_daum(url):
-    print(f"\n--- Checking Daum: {url} ---")
-    r = requests.get(url, headers=headers)
-    # postId 찾기
-    pid_match = re.search(r'\"postId\":\"(.*?)\"', r.text)
-    if pid_match:
-        print(f"Found postId: {pid_match.group(1)}")
-    else:
-        # data-post-id 찾기
-        pid_match = re.search(r'data-post-id=\"(.*?)\"', r.text)
-        if pid_match:
-            print(f"Found data-post-id: {pid_match.group(1)}")
-        else:
-            print("No postId/articleId found in HTML")
+def analyze_daum(url):
+    print(f"\nAnalyzing Daum: {url}")
+    res = requests.get(url, headers=headers)
+    html = res.text
+    
+    # Alex 설정 찾기
+    post_id = re.search(r'\"postId\"\s*:\s*\"(\d+)\"', html) or \
+              re.search(r'data-post-id=\"(\d+)\"', html) or \
+              re.search(r'/v/(\d+)', url)
+    print(f"Post ID: {post_id.group(1) if post_id else 'N/A'}")
 
 if __name__ == "__main__":
-    check_naver("https://n.news.naver.com/article/437/0000483987")
-    check_daum("https://v.daum.net/v/20260321214325415")
+    analyze_naver("https://n.news.naver.com/article/025/0003510578")
+    analyze_daum("https://v.daum.net/v/20260321225027343")

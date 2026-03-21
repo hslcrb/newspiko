@@ -101,76 +101,72 @@ class NaverNewsCrawler:
             found_pool = "g_news"
             
             # 1. 적절한 템플릿 및 ObjectID 찾기
-            # Naver 뉴스 댓글은 ticket="news", pool="g_news"가 기본이지만 섹션에 따라 다름
-            # objectId는 주로 news{oid},{aid} 또는 news{oid}{aid} 형태
-            found_template = None
-            found_object_id = None
+            # Naver 뉴스 댓글 핵심 파라미터 재정의
+            found_template = "default"
+            found_object_id = object_ids[0]
             found_pool = "g_news"
+            found_ticket = "news"
             
-            # 시도할 티켓 목록 (금융, 연예, 스포츠 등은 다를 수 있음)
-            tickets = ["news", "sports", "ent"]
+            # 모바일 스타일 헤더로 변경 (이것이 더 안정적임)
+            headers.update({
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36',
+                'Referer': f"https://n.news.naver.com/article/{oid}/{aid}"
+            })
+
+            # 시도할 티켓 및 조합
+            test_combinations = [
+                {"ticket": "news", "templateId": "default", "pool": "g_news"},
+                {"ticket": "news", "templateId": "m_news", "pool": "g_news"},
+                {"ticket": "ent", "templateId": "default", "pool": "g_ent"},
+                {"ticket": "sports", "templateId": "m_sports", "pool": "g_sports"}
+            ]
             
-            for ticket in tickets:
-                if found_template: break
+            is_found = False
+            for combo in test_combinations:
+                if is_found: break
                 for obj_id in object_ids:
-                    if found_template: break
-                    for tid in templates:
-                        # 다양한 pool 후보 시도
-                        for pool in ["g_news", "g_politics", "g_society", "g_economy", "g_sports", "g_ent"]:
-                            params = {
-                                "ticket": ticket, "templateId": tid, "pool": pool,
-                                "lang": "ko", "country": "KR", "objectId": obj_id,
-                                "pageSize": 10, "page": 1 # 테스트용으로 작게
-                            }
-                            try:
-                                response = self.session.get(url, params=params, headers=headers, timeout=5)
-                                if response.status_code != 200: continue
-                                
-                                json_text = re.sub(r'^[^\({]+\(', '', response.text)
-                                json_text = re.sub(r'\);?\s*$', '', json_text)
-                                data = json.loads(json_text)
-                                
-                                if 'result' in data and data['result'].get('count', {}).get('total', 0) > 0:
-                                    found_template = tid
-                                    found_object_id = obj_id
-                                    found_pool = pool
-                                    found_ticket = ticket
-                                    break
-                            except: continue
-                        if found_template: break
-            
-            if not found_template:
-                # 결과는 없지만(댓글 0개) API가 정상인 경우를 대비해 기본값 설정 후 한 번 더 시도
-                found_template, found_object_id, found_pool, found_ticket = "default", object_ids[0], "g_news", "news"
-            
-            # 2. 페이징 처리하여 수집
-            page = 1
-            sort_types = ["FAVORITE", "NEWEST"]
-            for sort in sort_types:
-                if all_comments: break
-                while len(all_comments) < max_comments:
                     params = {
-                        "ticket": found_ticket, "templateId": found_template, "pool": found_pool,
-                        "lang": "ko", "country": "KR", "objectId": found_object_id,
-                        "pageSize": 100, "page": page, "sort": sort
+                        "ticket": combo["ticket"], "templateId": combo["templateId"], "pool": combo["pool"],
+                        "lang": "ko", "country": "KR", "objectId": obj_id,
+                        "pageSize": 5, "page": 1
                     }
-                    response = self.session.get(url, params=params, headers=headers, timeout=10)
-                    if response.status_code != 200: break
-                    
-                    json_text = re.sub(r'^[^\({]+\(', '', response.text)
-                    json_text = re.sub(r'\);?\s*$', '', json_text)
                     try:
-                        data = json.loads(json_text)
-                    except: break
+                        response = self.session.get(url, params=params, headers=headers, timeout=5)
+                        # JSONP 파싱 유연화
+                        raw_text = response.text
+                        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                        if not json_match: continue
+                        data = json.loads(json_match.group(0))
+                        
+                        if 'result' in data and data['result'].get('count', {}).get('total', 0) >= 0:
+                            # total이 0이어도 성공한 것으로 간주 (API가 유효함)
+                            found_template, found_object_id, found_pool, found_ticket = combo["templateId"], obj_id, combo["pool"], combo["ticket"]
+                            if data['result'].get('count', {}).get('total', 0) > 0:
+                                is_found = True
+                                break
+                    except: continue
+
+            # 2. 페이징 수집
+            page = 1
+            while len(all_comments) < max_comments:
+                params = {
+                    "ticket": found_ticket, "templateId": found_template, "pool": found_pool,
+                    "lang": "ko", "country": "KR", "objectId": found_object_id,
+                    "pageSize": 100, "page": page, "sort": "FAVORITE"
+                }
+                try:
+                    response = self.session.get(url, params=params, headers=headers, timeout=10)
+                    raw_text = response.text
+                    json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                    if not json_match: break
+                    data = json.loads(json_match.group(0))
                     
                     comment_list = data.get('result', {}).get('commentList', [])
                     if not comment_list: break
                     
                     for c in comment_list:
-                        # 중복 제거
                         c_id = c.get('commentNo')
                         if any(existing.get('no') == c_id for existing in all_comments): continue
-                        
                         all_comments.append({
                             'no': c_id,
                             'user': c.get('userName', '익명'),
@@ -179,10 +175,10 @@ class NaverNewsCrawler:
                             'bad': c.get('antisympathyCount', 0),
                             'time': c.get('regTime', '')
                         })
-                    
                     if len(comment_list) < 100: break
                     page += 1
-                    time.sleep(0.05)
+                except: break
+                time.sleep(0.05)
                 
             return all_comments
         except Exception as e:
