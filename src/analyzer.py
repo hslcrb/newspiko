@@ -12,8 +12,8 @@ class NewsAnalyzer:
         self.client = None
         if self.api_key:
             self.client = Groq(api_key=self.api_key)
-
-        self.system_message = """당신은 대한민국 뉴스 및 여론 분석 전문가입니다.
+        
+        self.system_message = """당신은 대한민국 뉴스 및 여론 분석 전문가입니다. 
 당신은 오직 분석 보고서만을 마크다운 형식으로 출력해야 하며, 서론이나 결론 등 잡담을 절대 섞지 마십시오.
 모든 데이터는 댓글 원문을 기반으로 정성적/정량적 추론을 거쳐 산출해야 합니다.
 
@@ -102,13 +102,12 @@ class NewsAnalyzer:
         }
         
         try:
-            # 1. 키워드 추출 (공백과 줄바꿈에 유연하게 대응)
+            # 1. 키워드 추출
             kw_match = re.search(r'\[KEYWORDS:\s*(\[.*?\])\s*\]', text, re.DOTALL | re.IGNORECASE)
             if kw_match:
                 try:
                     results["keywords"] = json.loads(kw_match.group(1).strip())
                 except json.JSONDecodeError:
-                    # JSON 형식이 불완전할 경우 수동 추출 시도
                     raw_items = re.findall(r'"([^"]*)"', kw_match.group(1))
                     results["keywords"] = [item for item in raw_items if item.strip()]
                 
