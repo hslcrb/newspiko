@@ -73,14 +73,18 @@ class NewsAnalyzer:
         }
         
         try:
-            # 1. 키워드 추출
-            kw_match = re.search(r'\[KEYWORDS:\s*(\[.*?\])\]', text, re.DOTALL)
+            # 1. 키워드 추출 (공백과 줄바꿈에 유연하게 대응)
+            kw_match = re.search(r'\[KEYWORDS:\s*(\[.*?\])\s*\]', text, re.DOTALL | re.IGNORECASE)
             if kw_match:
-                import json
-                results["keywords"] = json.loads(kw_match.group(1))
+                try:
+                    results["keywords"] = json.loads(kw_match.group(1).strip())
+                except json.JSONDecodeError:
+                    # JSON 형식이 불완전할 경우 수동 추출 시도
+                    raw_items = re.findall(r'"([^"]*)"', kw_match.group(1))
+                    results["keywords"] = [item for item in raw_items if item.strip()]
                 
             # 2. 감성 점수 추출
-            sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+),\s*neu=(\d+)\]', text)
+            sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+),\s*neu=(\d+)\]', text, re.IGNORECASE)
             if sent_match:
                 results["sentiment"] = {
                     "pos": int(sent_match.group(1)),
@@ -89,11 +93,11 @@ class NewsAnalyzer:
                 }
                 
             # 3. 의심 지수 추출
-            susp_match = re.search(r'\[SUSPICION:\s*(\d+)\]', text)
+            susp_match = re.search(r'\[SUSPICION:\s*(\d+)\]', text, re.IGNORECASE)
             if susp_match:
                 results["suspicion"] = int(susp_match.group(1))
                 
         except Exception as e:
-            print(f"[AI-PARSER] Error: {e}")
+            print(f"[AI-PARSER] Fatal Error: {e}")
             
         return results

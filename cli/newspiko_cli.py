@@ -84,7 +84,15 @@ class NewspikoCLI:
 
         print(f"\n{Fore.CYAN}>>> AI 여론 분석 엔진 가동...")
         analysis = self.analyzer.analyze_opinion({'title': news['title'], 'content': details['content']}, comments)
+        parsing_res = self.analyzer.parse_results(analysis)
+        
         print(f"\n{Fore.WHITE}{analysis}")
+        
+        print(f"\n{Fore.YELLOW}📋 [구조 분석 요약]")
+        print(f"- 주요 키워드: {', '.join(parsing_res['keywords'][:5])}")
+        print(f"- AI 진단 지수: {parsing_res['suspicion']}/100")
+        sent = parsing_res['sentiment']
+        print(f"- 감성 분포: 긍정({sent['pos']}%), 부정({sent['neg']}%), 관망({sent['neu']}%)")
 
     def export_csv(self, idx, filename):
         if not (0 <= idx < len(self.current_news_list)):
