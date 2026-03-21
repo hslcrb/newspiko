@@ -273,13 +273,24 @@ class ModernNewsApp(QMainWindow):
         comments = self.crawler.get_comments(details['oid'], details['aid'])
         self.statusBar().showMessage(f"댓글 {len(comments)}개 수집 완료")
 
-        # 패턴 분석 (중복 작성자 탐지)
-        user_counts = {}
-        for c in comments:
-            user_counts[c['user']] = user_counts.get(c['user'], 0) + 1
-        heavy_users = [u for u, count in user_counts.items() if count > 1]
-        if heavy_users:
-            self.pattern_label.setText(f"⚠ 조직적 활동 의심 유저 {len(heavy_users)}명 감지")
+        # 패턴 분석 (집단성 탐지 고도화)
+        from pattern_detector import PatternDetector
+        detector = PatternDetector()
+        analysis = detector.analyze(comments)
+        
+        heavy_users = analysis['heavy_users']
+        macro_count = len(analysis['macro_comments'])
+        similar_count = len(analysis['similar_groups'])
+        
+        status_msg = []
+        if heavy_users: status_msg.append(f"중복유저 {len(heavy_users)}명")
+        if macro_count: status_msg.append(f"매크로의심 {macro_count}건")
+        if similar_count: status_msg.append(f"집단유사성 {similar_count}건")
+        
+        if status_msg:
+            self.pattern_label.setText("⚠ " + " | ".join(status_msg))
+        else:
+            self.pattern_label.setText("✓ 특이 패턴 미감지")
 
         # 댓글 리스트 프리티 프린트
         for c in comments:
