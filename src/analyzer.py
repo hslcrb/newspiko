@@ -45,11 +45,9 @@ class NewsAnalyzer:
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-oss-120b",
-                temperature=1,
-                max_completion_tokens=8192,
-                top_p=1,
-                extra_body={"reasoning_effort": "medium"}
+                model="llama-3.3-70b-versatile",
+                temperature=0.7,
+                max_tokens=4096,
             )
             return chat_completion.choices[0].message.content
         except Exception as e:

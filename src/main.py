@@ -22,10 +22,17 @@ class AnalysisThread(QThread):
 
     def run(self):
         result = self.analyzer.analyze_opinion(self.article, self.comments)
-        # 간단한 감성 분석 파싱 (결과 텍스트에서 긍정/부정 수치를 찾아냄 - 모의)
-        sentiment = {"pos": 50, "neg": 50}
-        if "긍정" in result: sentiment["pos"] += 20; sentiment["neg"] -= 20
-        elif "부정" in result: sentiment["neg"] += 20; sentiment["pos"] -= 20
+        # AI 결과에서 감성 점수 파싱 ([SENTIMENT: pos=XX, neg=XX, neu=XX])
+        sentiment = {"pos": 50, "neg": 50, "neu": 0}
+        import re
+        sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+)(?:,\s*neu=(\d+))?\]', result)
+        if sent_match:
+            sentiment["pos"] = int(sent_match.group(1))
+            sentiment["neg"] = int(sent_match.group(2))
+            sentiment["neu"] = int(sent_match.group(3)) if sent_match.group(3) else 0
+            # 태그 제거 (UI 청소)
+            result = result.replace(sent_match.group(0), "")
+        
         self.finished.emit({"text": result, "sentiment": sentiment})
 
 class ModernNewsApp(QMainWindow):
@@ -420,8 +427,12 @@ class ModernNewsApp(QMainWindow):
         sent = data["sentiment"]
         self.pos_bar.setToolTip(f"긍정 지표: {sent['pos']}%")
         self.neg_bar.setToolTip(f"부정 지표: {sent['neg']}%")
-        self.sent_layout.setStretch(0, sent["pos"])
-        self.sent_layout.setStretch(1, sent["neg"])
+        
+        # 중립(neu)이 있다면 부정을 줄이거나 별도 표시 (여기서는 긍정/부정만 바에 표시)
+        total = sent['pos'] + sent['neg']
+        if total > 0:
+            self.sent_layout.setStretch(0, sent["pos"])
+            self.sent_layout.setStretch(1, sent["neg"])
         self.sentiment_container.setVisible(True)
 
         # 감성 히스토리 기록 (최근 15개로 제한)
