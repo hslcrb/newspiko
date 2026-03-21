@@ -27,6 +27,12 @@ def analyze_naver(url):
     print(f"All TemplateIds found: {list(set(template_ids))}")
     print(f"All ObjectIds found: {list(set(object_ids))}")
     
+    # 3. 댓글 개수 확인 (u_cbox_count 등)
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+    count = soup.select_one('.u_cbox_count') or soup.select_one('.count')
+    print(f"Comment Count in HTML: {count.text if count else 'Not Found'}")
+    
     # script 내부의 g_news 등 검색
     if "g_news" in html: print("Found 'g_news' in HTML")
     if "commentList" in html: print("Found 'commentList' in HTML")
@@ -41,6 +47,11 @@ def analyze_daum(url):
               re.search(r'data-post-id=\"(\d+)\"', html) or \
               re.search(r'/v/(\d+)', url)
     print(f"Post ID: {post_id.group(1) if post_id else 'N/A'}")
+    
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+    count = soup.select_one('.alex-count-area') or soup.select_one('.num_txt')
+    print(f"Comment Count in HTML: {count.text if count else 'Not Found'}")
 
 if __name__ == "__main__":
     analyze_naver("https://n.news.naver.com/article/025/0003510578")

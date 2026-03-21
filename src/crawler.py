@@ -100,66 +100,64 @@ class NaverNewsCrawler:
             found_object_id = None
             found_pool = "g_news"
             
-            # 1. 적절한 템플릿 및 ObjectID 찾기
-            # Naver 뉴스 댓글 핵심 파라미터 재정의
-            found_template = "default"
-            found_object_id = object_ids[0]
-            found_pool = "g_news"
-            found_ticket = "news"
+            # Naver News Comment API (CBOX) 최신 규격 반영
+            url = "https://apis.naver.com/commentBox/cbox/web_naver_list_jsonp.json"
             
-            # 모바일 스타일 헤더로 변경 (이것이 더 안정적임)
+            # 1. 최적의 파라미터 조합 탐색
+            found_params = None
+            
+            # 모바일/데스크톱 크로스 헤더
             headers.update({
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Referer': f"https://n.news.naver.com/article/{oid}/{aid}"
             })
 
-            # 시도할 티켓 및 조합
-            test_combinations = [
-                {"ticket": "news", "templateId": "default", "pool": "g_news"},
-                {"ticket": "news", "templateId": "m_news", "pool": "g_news"},
-                {"ticket": "ent", "templateId": "default", "pool": "g_ent"},
-                {"ticket": "sports", "templateId": "m_sports", "pool": "g_sports"}
+            # 시도할 조합 (ticket, pool, templateId)
+            combos = [
+                ("news", "cbox5", "default"),     # 최신 표준
+                ("news", "g_news", "default"),    # 레거시 표준
+                ("news", "cbox5", "m_news"),      # 모바일
+                ("news", "g_news", "m_news")
             ]
             
-            is_found = False
-            for combo in test_combinations:
-                if is_found: break
+            for ticket, pool, tid in combos:
+                if found_params: break
                 for obj_id in object_ids:
                     params = {
-                        "ticket": combo["ticket"], "templateId": combo["templateId"], "pool": combo["pool"],
+                        "ticket": ticket, "templateId": tid, "pool": pool,
                         "lang": "ko", "country": "KR", "objectId": obj_id,
                         "pageSize": 5, "page": 1
                     }
                     try:
                         response = self.session.get(url, params=params, headers=headers, timeout=5)
-                        # JSONP 파싱 유연화
-                        raw_text = response.text
-                        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-                        if not json_match: continue
-                        data = json.loads(json_match.group(0))
+                        # JSONP 정밀 파싱: _callback(...) 또는 json(...) 형태 대응
+                        match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                        if not match: continue
+                        data = json.loads(match.group(0))
                         
-                        if 'result' in data and data['result'].get('count', {}).get('total', 0) >= 0:
-                            # total이 0이어도 성공한 것으로 간주 (API가 유효함)
-                            found_template, found_object_id, found_pool, found_ticket = combo["templateId"], obj_id, combo["pool"], combo["ticket"]
-                            if data['result'].get('count', {}).get('total', 0) > 0:
-                                is_found = True
-                                break
+                        if data.get('success'):
+                            # API 호출 자체는 성공
+                            found_params = {"ticket": ticket, "pool": pool, "templateId": tid, "objectId": obj_id}
+                            if data.get('result', {}).get('count', {}).get('total', 0) > 0:
+                                break # 실데이터 존재 시 확정
                     except: continue
 
-            # 2. 페이징 수집
+            if not found_params:
+                found_params = {"ticket": "news", "pool": "cbox5", "templateId": "default", "objectId": object_ids[0]}
+
+            # 2. 실데이터 수집
             page = 1
             while len(all_comments) < max_comments:
                 params = {
-                    "ticket": found_ticket, "templateId": found_template, "pool": found_pool,
-                    "lang": "ko", "country": "KR", "objectId": found_object_id,
-                    "pageSize": 100, "page": page, "sort": "FAVORITE"
+                    "ticket": found_params["ticket"], "templateId": found_params["templateId"], 
+                    "pool": found_params["pool"], "objectId": found_params["objectId"],
+                    "lang": "ko", "country": "KR", "pageSize": 100, "page": page, "sort": "FAVORITE"
                 }
                 try:
                     response = self.session.get(url, params=params, headers=headers, timeout=10)
-                    raw_text = response.text
-                    json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
-                    if not json_match: break
-                    data = json.loads(json_match.group(0))
+                    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if not match: break
+                    data = json.loads(match.group(0))
                     
                     comment_list = data.get('result', {}).get('commentList', [])
                     if not comment_list: break
