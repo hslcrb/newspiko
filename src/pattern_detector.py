@@ -10,7 +10,13 @@ class PatternDetector:
         댓글 목록을 분석하여 집단성 및 패턴을 탐지합니다.
         """
         if not comments:
-            return {"heavy_users": [], "macro_comments": [], "burst_detected": False}
+            return {
+                "heavy_users": [], 
+                "user_counts": {},
+                "macro_comments": [], 
+                "similar_groups": [],
+                "suspicion_score": 0
+            }
 
         # 1. 중복 작성자 탐지 (Heavy Users)
         user_counts = Counter([c['user'] for c in comments])
