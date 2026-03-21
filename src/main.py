@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QListWidget, QTextEdit, 
                              QPushButton, QFrame, QSplitter, QProgressBar,
-                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox)
+                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox, QFileDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from styles import get_theme_css
 from crawler import NaverNewsCrawler
@@ -174,6 +174,12 @@ class ModernNewsApp(QMainWindow):
         self.save_btn.setObjectName("saveBtn")
         self.save_btn.clicked.connect(self.save_report)
         analysis_header.addWidget(self.save_btn)
+        
+        self.csv_btn = QPushButton("📊 CSV")
+        self.csv_btn.setMinimumWidth(80)
+        self.csv_btn.setObjectName("csvBtn")
+        self.csv_btn.clicked.connect(self.export_csv)
+        analysis_header.addWidget(self.csv_btn)
         
         analysis_header.addStretch() # 라벨과 버튼 사이 공간 확보
         
@@ -386,6 +392,42 @@ class ModernNewsApp(QMainWindow):
                 QMessageBox.information(self, "완료", f"리포트가 성공적으로 저장되었습니다.\n{file_path}")
             except Exception as e:
                 QMessageBox.critical(self, "오류", f"저장 중 오류가 발생했습니다: {str(e)}")
+
+    def export_csv(self):
+        if self.comment_list_widget.count() == 0:
+            QMessageBox.warning(self, "경고", "내보낼 댓글 데이터가 없습니다.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "데이터 내보내기", "", "CSV Files (*.csv)")
+        if file_path:
+            try:
+                import pandas as pd
+                data = []
+                for i in range(self.comment_list_widget.count()):
+                    raw_text = self.comment_list_widget.item(i).text()
+                    # 간단한 파싱 (display_text 형식: 👤 {user} | 🕒 {time}\n{text}\n👍 {good}  👎 {bad})
+                    lines = raw_text.split('\n')
+                    header = lines[0].split('|')
+                    user = header[0].replace('👤', '').strip()
+                    time_val = header[1].replace('🕒', '').strip()
+                    text = lines[1]
+                    reactions = lines[2].split('  ')
+                    good = reactions[0].replace('👍', '').strip()
+                    bad = reactions[1].replace('👎', '').strip()
+                    
+                    data.append({
+                        "User": user,
+                        "Time": time_val,
+                        "Comment": text,
+                        "Good": good,
+                        "Bad": bad
+                    })
+                
+                df = pd.DataFrame(data)
+                df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                QMessageBox.information(self, "완료", f"데이터가 CSV로 저장되었습니다.\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "오류", f"CSV 저장 중 오류가 발생했습니다: {str(e)}")
 
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
