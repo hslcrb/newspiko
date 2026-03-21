@@ -157,10 +157,10 @@ class ModernNewsApp(QMainWindow):
         analysis_frame = QFrame()
         analysis_layout = QVBoxLayout(analysis_frame)
         
-        analysis_header = QHBoxLayout()
-        analysis_label = QLabel("AI 여론 통찰")
-        analysis_label.setObjectName("analysisLabel")
-        analysis_header.addWidget(analysis_label)
+        self.save_btn = QPushButton("💾 저장")
+        self.save_btn.setFixedWidth(60)
+        self.save_btn.clicked.connect(self.save_report)
+        analysis_header.addWidget(self.save_btn)
         
         self.progress = QProgressBar()
         self.progress.setVisible(False)
@@ -347,6 +347,30 @@ class ModernNewsApp(QMainWindow):
         comment_text = item.data(Qt.ItemDataRole.UserRole)
         self.statusBar().showMessage(f"댓글 분석 선택됨: {comment_text[:20]}...")
         QMessageBox.information(self, "댓글 상세", f"선택한 댓글 원문:\n\n{comment_text}")
+
+    def save_report(self):
+        if not self.analysis_view.toPlainText():
+            QMessageBox.warning(self, "경고", "저장할 분석 내용이 없습니다.")
+            return
+
+        from PyQt6.QtPrintSupport import QPrinter
+        from PyQt6.QtWidgets import QFileDialog
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "리포트 저장", "", "PDF Files (*.pdf);;Text Files (*.txt)")
+        if file_path:
+            try:
+                if file_path.endswith(".pdf"):
+                    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                    printer.setOutputFileName(file_path)
+                    self.analysis_view.document().print_(printer)
+                else:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(self.analysis_view.toPlainText())
+                
+                QMessageBox.information(self, "완료", f"리포트가 성공적으로 저장되었습니다.\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "오류", f"저장 중 오류가 발생했습니다: {str(e)}")
 
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
