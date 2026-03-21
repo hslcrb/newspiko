@@ -9,11 +9,26 @@ class NaverNewsCrawler:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+        self.session = self._create_session()
+
+    def _create_session(self):
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[500, 502, 503, 504]
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        return session
 
     def get_ranking_news(self):
         url = "https://news.naver.com/main/ranking/popularDay.naver"
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = self.session.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -21,7 +36,9 @@ class NaverNewsCrawler:
             ranking_boxes = soup.find_all('div', class_='rankingnews_box')
             
             for box in ranking_boxes:
-                press_name = box.find('strong', class_='rankingnews_name').get_text(strip=True)
+                name_tag = box.find('strong', class_='rankingnews_name')
+                if not name_tag: continue
+                press_name = name_tag.get_text(strip=True)
                 items = box.find_all('li')
                 for item in items:
                     title_tag = item.find('a', class_='list_title')
@@ -38,7 +55,7 @@ class NaverNewsCrawler:
 
     def get_article_details(self, url):
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = self.session.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -69,17 +86,9 @@ class NaverNewsCrawler:
         if not oid or not aid: return []
         
         url = "https://apis.naver.com/comment/comment/get/v2/jsonp/commentList.json"
-        params = {
-            "ticket": "news",
-            "templateId": "default",
-            "pool": "g_news",
-            "lang": "ko",
-            "country": "KR",
-            "objectId": f"news{oid},{aid}",
-            "pageSize": 100,
-            "page": 1,
-            "sort": "FAVORITE"
-        }
+        
+        # 시도해볼 ObjectID 형식들
+        object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"]
         
         headers = self.headers.copy()
         headers['Referer'] = f'https://n.news.naver.com/article/comment/{oid}/{aid}'
@@ -88,45 +97,78 @@ class NaverNewsCrawler:
         try:
             templates = ["default", "default_politics", "default_society", "default_economy"]
             found_template = None
+            found_object_id = None
+            found_pool = "g_news"
             
-            # 1. 적절한 템플릿 찾기
-            for tid in templates:
-                params["templateId"] = tid
-                response = requests.get(url, params=params, headers=headers, timeout=10)
-                json_text = re.sub(r'^[^\({]+\(', '', response.text)
-                json_text = re.sub(r'\);?\s*$', '', json_text)
-                data = json.loads(json_text)
-                if 'result' in data and data['result'].get('commentList'):
-                    found_template = tid
-                    break
+            # Naver News Comment API (CBOX) 최신 규격 (2026)
+            # ticket='news', pool='cbox5', objectId='news{oid},{aid}' 조합이 표준
+            url = "https://apis.naver.com/commentBox/cbox/web_naver_list_jsonp.json"
             
-            if not found_template: return []
+            # 1. 파라미터 조합 설정
+            # 시도할 object_id 후보들 (쉼표 포함 버전 우선)
+            pref_object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"] + object_ids
             
-            # 2. 페이징 처리하여 수집
-            params["templateId"] = found_template
+            found_params = None
+            headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': f"https://n.news.naver.com/article/{oid}/{aid}"
+            })
+
+            for obj_id in pref_object_ids:
+                if found_params: break
+                for ticket, pool in [("news", "cbox5"), ("news", "g_news")]:
+                    params = {
+                        "ticket": ticket, "templateId": "default", "pool": pool,
+                        "lang": "ko", "country": "KR", "objectId": obj_id,
+                        "pageSize": 5, "page": 1
+                    }
+                    try:
+                        response = self.session.get(url, params=params, headers=headers, timeout=5)
+                        match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                        if not match: continue
+                        data = json.loads(match.group(0))
+                        
+                        if data.get('success'):
+                            found_params = {"ticket": ticket, "pool": pool, "objectId": obj_id}
+                            if data.get('result', {}).get('count', {}).get('total', 0) > 0:
+                                break
+                    except: continue
+
+            if not found_params:
+                found_params = {"ticket": "news", "pool": "cbox5", "objectId": f"news{oid},{aid}"}
+
+            # 2. 실데이터 페이징 수집
             page = 1
             while len(all_comments) < max_comments:
-                params["page"] = page
-                response = requests.get(url, params=params, headers=headers, timeout=10)
-                json_text = re.sub(r'^[^\({]+\(', '', response.text)
-                json_text = re.sub(r'\);?\s*$', '', json_text)
-                data = json.loads(json_text)
-                
-                comment_list = data.get('result', {}).get('commentList', [])
-                if not comment_list: break
-                
-                for c in comment_list:
-                    all_comments.append({
-                        'user': c.get('userName', '익명'),
-                        'text': c.get('contents', ''),
-                        'good': c.get('sympathyCount', 0),
-                        'bad': c.get('antisympathyCount', 0),
-                        'time': c.get('regTime', '')
-                    })
-                
-                if len(comment_list) < 100: break # 마지막 페이지
-                page += 1
-                time.sleep(0.1) # 서버 부하 방지
+                params = {
+                    "ticket": found_params["ticket"], "templateId": "default", 
+                    "pool": found_params["pool"], "objectId": found_params["objectId"],
+                    "lang": "ko", "country": "KR", "pageSize": 100, "page": page, "sort": "FAVORITE"
+                }
+                try:
+                    response = self.session.get(url, params=params, headers=headers, timeout=10)
+                    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if not match: break
+                    data = json.loads(match.group(0))
+                    
+                    comment_list = data.get('result', {}).get('commentList', [])
+                    if not comment_list: break
+                    
+                    for c in comment_list:
+                        c_id = c.get('commentNo')
+                        if any(existing.get('no') == c_id for existing in all_comments): continue
+                        all_comments.append({
+                            'no': c_id,
+                            'user': c.get('userName', '익명'),
+                            'text': c.get('contents', ''),
+                            'good': c.get('sympathyCount', 0),
+                            'bad': c.get('antisympathyCount', 0),
+                            'time': c.get('regTime', '')
+                        })
+                    if len(comment_list) < 100: break
+                    page += 1
+                except: break
+                time.sleep(0.05)
                 
             return all_comments
         except Exception as e:

@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QListWidget, QTextEdit, 
                              QPushButton, QFrame, QSplitter, QProgressBar,
-                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox)
+                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox, QFileDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from styles import get_theme_css
 from crawler import NaverNewsCrawler
@@ -22,10 +22,17 @@ class AnalysisThread(QThread):
 
     def run(self):
         result = self.analyzer.analyze_opinion(self.article, self.comments)
-        # 간단한 감성 분석 파싱 (결과 텍스트에서 긍정/부정 수치를 찾아냄 - 모의)
-        sentiment = {"pos": 50, "neg": 50}
-        if "긍정" in result: sentiment["pos"] += 20; sentiment["neg"] -= 20
-        elif "부정" in result: sentiment["neg"] += 20; sentiment["pos"] -= 20
+        # AI 결과에서 감성 점수 파싱 ([SENTIMENT: pos=XX, neg=XX, neu=XX])
+        sentiment = {"pos": 50, "neg": 50, "neu": 0}
+        import re
+        sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+)(?:,\s*neu=(\d+))?\]', result)
+        if sent_match:
+            sentiment["pos"] = int(sent_match.group(1))
+            sentiment["neg"] = int(sent_match.group(2))
+            sentiment["neu"] = int(sent_match.group(3)) if sent_match.group(3) else 0
+            # 태그 제거 (UI 청소)
+            result = result.replace(sent_match.group(0), "")
+        
         self.finished.emit({"text": result, "sentiment": sentiment})
 
 class ModernNewsApp(QMainWindow):
@@ -162,6 +169,20 @@ class ModernNewsApp(QMainWindow):
         analysis_label.setObjectName("analysisLabel")
         analysis_header.addWidget(analysis_label)
         
+        self.save_btn = QPushButton("💾 저장")
+        self.save_btn.setMinimumWidth(80) # 크기 보장
+        self.save_btn.setObjectName("saveBtn")
+        self.save_btn.clicked.connect(self.save_report)
+        analysis_header.addWidget(self.save_btn)
+        
+        self.csv_btn = QPushButton("📊 CSV")
+        self.csv_btn.setMinimumWidth(80)
+        self.csv_btn.setObjectName("csvBtn")
+        self.csv_btn.clicked.connect(self.export_csv)
+        analysis_header.addWidget(self.csv_btn)
+        
+        analysis_header.addStretch() # 라벨과 버튼 사이 공간 확보
+        
         self.progress = QProgressBar()
         self.progress.setVisible(False)
         self.progress.setMaximum(0)
@@ -182,6 +203,25 @@ class ModernNewsApp(QMainWindow):
         self.sent_layout.addWidget(self.pos_bar, 50)
         self.sent_layout.addWidget(self.neg_bar, 50)
         analysis_layout.addWidget(self.sentiment_container)
+
+        # 감성 트렌드 영역 (히스토리 차트 대용)
+        self.trend_frame = QFrame()
+        self.trend_frame.setFixedHeight(60)
+        self.trend_frame.setObjectName("trendFrame")
+        self.trend_layout = QHBoxLayout(self.trend_frame)
+        self.trend_layout.setContentsMargins(5, 5, 5, 5)
+        self.trend_layout.setSpacing(2)
+        analysis_layout.addWidget(self.trend_frame)
+        self.sentiment_history = [] # (pos, neg) 튜플 저장
+        
+        # 키워드 마인드맵/태그 영역 추가
+        self.keyword_frame = QFrame()
+        self.keyword_frame.setObjectName("keywordFrame")
+        self.keyword_frame.setVisible(False)
+        self.keyword_layout = QHBoxLayout(self.keyword_frame)
+        self.keyword_layout.setContentsMargins(5, 5, 5, 5)
+        self.keyword_layout.setSpacing(5)
+        analysis_layout.addWidget(self.keyword_frame)
         
         self.analysis_view = QTextEdit()
         self.analysis_view.setReadOnly(True)
@@ -273,13 +313,24 @@ class ModernNewsApp(QMainWindow):
         comments = self.crawler.get_comments(details['oid'], details['aid'])
         self.statusBar().showMessage(f"댓글 {len(comments)}개 수집 완료")
 
-        # 패턴 분석 (중복 작성자 탐지)
-        user_counts = {}
-        for c in comments:
-            user_counts[c['user']] = user_counts.get(c['user'], 0) + 1
-        heavy_users = [u for u, count in user_counts.items() if count > 1]
-        if heavy_users:
-            self.pattern_label.setText(f"⚠ 조직적 활동 의심 유저 {len(heavy_users)}명 감지")
+        # 패턴 분석 (집단성 탐지 고도화)
+        from pattern_detector import PatternDetector
+        detector = PatternDetector()
+        analysis = detector.analyze(comments)
+        
+        heavy_users = analysis['heavy_users']
+        macro_count = len(analysis['macro_comments'])
+        similar_count = len(analysis['similar_groups'])
+        
+        status_msg = []
+        if heavy_users: status_msg.append(f"중복유저 {len(heavy_users)}명")
+        if macro_count: status_msg.append(f"매크로의심 {macro_count}건")
+        if similar_count: status_msg.append(f"집단유사성 {similar_count}건")
+        
+        if status_msg:
+            self.pattern_label.setText("⚠ " + " | ".join(status_msg))
+        else:
+            self.pattern_label.setText("✓ 특이 패턴 미감지")
 
         # 댓글 리스트 프리티 프린트
         for c in comments:
@@ -318,19 +369,144 @@ class ModernNewsApp(QMainWindow):
         self.statusBar().showMessage(f"댓글 분석 선택됨: {comment_text[:20]}...")
         QMessageBox.information(self, "댓글 상세", f"선택한 댓글 원문:\n\n{comment_text}")
 
+    def save_report(self):
+        if not self.analysis_view.toPlainText():
+            QMessageBox.warning(self, "경고", "저장할 분석 내용이 없습니다.")
+            return
+
+        from PyQt6.QtPrintSupport import QPrinter
+        from PyQt6.QtWidgets import QFileDialog
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "리포트 저장", "", "PDF Files (*.pdf);;Text Files (*.txt)")
+        if file_path:
+            try:
+                if file_path.endswith(".pdf"):
+                    printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+                    printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+                    printer.setOutputFileName(file_path)
+                    self.analysis_view.document().print_(printer)
+                else:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.write(self.analysis_view.toPlainText())
+                
+                QMessageBox.information(self, "완료", f"리포트가 성공적으로 저장되었습니다.\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "오류", f"저장 중 오류가 발생했습니다: {str(e)}")
+
+    def export_csv(self):
+        if self.comment_list_widget.count() == 0:
+            QMessageBox.warning(self, "경고", "내보낼 댓글 데이터가 없습니다.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "데이터 내보내기", "", "CSV Files (*.csv)")
+        if file_path:
+            try:
+                import pandas as pd
+                data = []
+                for i in range(self.comment_list_widget.count()):
+                    raw_text = self.comment_list_widget.item(i).text()
+                    # 간단한 파싱 (display_text 형식: 👤 {user} | 🕒 {time}\n{text}\n👍 {good}  👎 {bad})
+                    lines = raw_text.split('\n')
+                    header = lines[0].split('|')
+                    user = header[0].replace('👤', '').strip()
+                    time_val = header[1].replace('🕒', '').strip()
+                    text = lines[1]
+                    reactions = lines[2].split('  ')
+                    good = reactions[0].replace('👍', '').strip()
+                    bad = reactions[1].replace('👎', '').strip()
+                    
+                    data.append({
+                        "User": user,
+                        "Time": time_val,
+                        "Comment": text,
+                        "Good": good,
+                        "Bad": bad
+                    })
+                
+                df = pd.DataFrame(data)
+                df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                QMessageBox.information(self, "완료", f"데이터가 CSV로 저장되었습니다.\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "오류", f"CSV 저장 중 오류가 발생했습니다: {str(e)}")
+
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
-        self.analysis_view.setMarkdown(data["text"])
+        result_text = data["text"]
+        
+        # 키워드 파싱 및 표시
+        import re
+        kw_match = re.search(r'\[KEYWORDS:\s*(.*?)\]', result_text)
+        if kw_match:
+            try:
+                # JSON 형식이거나 단순 쉼표 구분일 수 있음
+                kw_str = kw_match.group(1).replace("'", '"')
+                import json
+                keywords = json.loads(kw_str) if kw_str.startswith('[') else [k.strip() for k in kw_str.split(',')]
+                
+                # 기존 키워드 제거
+                for i in reversed(range(self.keyword_layout.count())): 
+                    self.keyword_layout.itemAt(i).widget().setParent(None)
+                
+                for kw in keywords[:8]: # 최대 8개
+                    kw_label = QLabel(f" #{kw} ")
+                    kw_label.setStyleSheet("""
+                        background-color: #334155; color: #38bdf8; 
+                        border-radius: 10px; padding: 2px 8px; font-weight: bold; font-size: 11px;
+                    """)
+                    self.keyword_layout.addWidget(kw_label)
+                self.keyword_frame.setVisible(True)
+                
+                # 본문에서 키워드 태그 제거 (UI 깔끔하게)
+                result_text = result_text.replace(kw_match.group(0), "")
+            except:
+                self.keyword_frame.setVisible(False)
+        else:
+            self.keyword_frame.setVisible(False)
+
+        self.analysis_view.setMarkdown(result_text)
         
         # 감성 시각화 업데이트
         sent = data["sentiment"]
         self.pos_bar.setToolTip(f"긍정 지표: {sent['pos']}%")
         self.neg_bar.setToolTip(f"부정 지표: {sent['neg']}%")
-        self.sent_layout.setStretch(0, sent["pos"])
-        self.sent_layout.setStretch(1, sent["neg"])
+        
+        # 중립(neu)이 있다면 부정을 줄이거나 별도 표시 (여기서는 긍정/부정만 바에 표시)
+        total = sent['pos'] + sent['neg']
+        if total > 0:
+            self.sent_layout.setStretch(0, sent["pos"])
+            self.sent_layout.setStretch(1, sent["neg"])
         self.sentiment_container.setVisible(True)
+
+        # 감성 히스토리 기록 (최근 15개로 제한)
+        self.sentiment_history.append(sent)
+        if len(self.sentiment_history) > 15:
+            self.sentiment_history.pop(0)
+            
+        # 기존 바 제거
+        for i in reversed(range(self.trend_layout.count())): 
+            self.trend_layout.itemAt(i).widget().setParent(None)
+            
+        for s in self.sentiment_history:
+            bar = QFrame()
+            bar.setFixedWidth(10)
+            bar_layout = QVBoxLayout(bar)
+            bar_layout.setContentsMargins(0, 0, 0, 0)
+            bar_layout.setSpacing(0)
+            
+            p_part = QLabel()
+            p_part.setStyleSheet("background-color: #3b82f6;")
+            n_part = QLabel()
+            n_part.setStyleSheet("background-color: #ef4444;")
+            
+            bar_layout.addWidget(p_part, s['pos'])
+            bar_layout.addWidget(n_part, s['neg'])
+            self.trend_layout.addWidget(bar)
         
         self.statusBar().showMessage("분석 완료")
+
+    def closeEvent(self, event):
+        self.config_mgr.save_config()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
