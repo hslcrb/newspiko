@@ -92,47 +92,71 @@ class DaumNewsCrawler:
             print(f"Daum Crawler Error (Details): {e}")
             return {'content': "", 'oid': "", 'aid': ""}
 
-    def get_comments(self, article_id, max_comments=100):
-        # 다음(Daum) 뉴스는 'Alex' 댓글 시스템을 사용합니다.
-        if not article_id: return []
+    def get_comments(self, url, max_comments=100, sort_order='RECOMMEND'):
+        if not url: return []
         
-        # Alex 전용 헤더 추가 (필수)
-        headers = self.headers.copy()
-        headers.update({
-            'Referer': f'https://v.daum.net/v/{article_id}',
-            'Accept': 'application/json'
-        })
-        
-        url = f"https://comment.daum.net/apis/v1/posts/{article_id}/comments"
-        
-        all_comments = []
-        sort_types = ["RECOMMEND", "LATEST"] # Daum은 LATEST 사용
-        
-        for sort in sort_types:
-            if all_comments: break
-            params = {
-                "limit": min(max_comments, 100),
-                "offset": 0,
-                "order": sort
-            }
-            try:
-                response = self.session.get(url, params=params, headers=headers, timeout=10)
-                if response.status_code != 200: continue
+        try:
+            # 1. HTML에서 Alex postId 및 clientId 추출 시도
+            res_html = self.session.get(url, headers=self.headers, timeout=10)
+            html = res_html.text
+            
+            # 숫자형 article_id 추출
+            article_id_match = re.search(r'/v/(\d+)', url)
+            article_id = article_id_match.group(1) if article_id_match else ""
+            
+            # 루즈한 postId 및 clientId 패턴
+            post_id_match = re.search(r'postId\s*[:=]\s*[\"\']?(\d+)[\"\']?', html, re.IGNORECASE)
+            # data-post-id 또는 clientId 등도 후보가 될 수 있음
+            
+            alex_post_id = post_id_match.group(1) if post_id_match else article_id
+            if not alex_post_id: return []
+
+            # 2. 댓글 API 호출
+            api_url = f"https://comment.daum.net/apis/v1/posts/{alex_post_id}/comments"
+            
+            headers = self.headers.copy()
+            headers.update({
+                'Referer': url,
+                'Origin': 'https://v.daum.net',
+                'Accept': 'application/json'
+            })
+            
+            all_comments = []
+            limit = 100
+            offset = 0
+            
+            while len(all_comments) < max_comments:
+                params = {
+                    "limit": limit,
+                    "offset": offset,
+                    "order": "RECOMMEND" if sort_order == "RECOMMEND" else "LATEST"
+                }
+                response = self.session.get(api_url, params=params, headers=headers, timeout=10)
+                if response.status_code != 200:
+                    break
                 
                 data = response.json()
-                if not data: continue
+                if not data:
+                    break
                 
                 for c in data:
+                    c_id = c.get('id')
                     user_info = c.get('user', {})
                     all_comments.append({
+                        'no': c_id,
                         'user': user_info.get('displayName', '익명'),
                         'text': c.get('content', ''),
                         'good': c.get('likeCount', 0),
                         'bad': c.get('dislikeCount', 0),
-                        'time': c.get('createdAt', '')[:10]
+                        'time': c.get('createdAt', '')
                     })
-                if all_comments: break # 수집 성공 시 중단
-            except Exception as e:
-                print(f"Daum API Trial Error ({sort}): {e}")
                 
-        return all_comments
+                if len(data) < limit:
+                    break
+                offset += limit
+                time.sleep(0.05)
+                
+            return all_comments
+        except Exception as e:
+            print(f"Daum 댓글 수집 오류: {e}")
+            return []

@@ -100,56 +100,48 @@ class NaverNewsCrawler:
             found_object_id = None
             found_pool = "g_news"
             
-            # Naver News Comment API (CBOX) 최신 규격 반영
+            # Naver News Comment API (CBOX) 최신 규격 (2026)
+            # ticket='news', pool='cbox5', objectId='news{oid},{aid}' 조합이 표준
             url = "https://apis.naver.com/commentBox/cbox/web_naver_list_jsonp.json"
             
-            # 1. 최적의 파라미터 조합 탐색
-            found_params = None
+            # 1. 파라미터 조합 설정
+            # 시도할 object_id 후보들 (쉼표 포함 버전 우선)
+            pref_object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"] + object_ids
             
-            # 모바일/데스크톱 크로스 헤더
+            found_params = None
             headers.update({
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Referer': f"https://n.news.naver.com/article/{oid}/{aid}"
             })
 
-            # 시도할 조합 (ticket, pool, templateId)
-            combos = [
-                ("news", "cbox5", "default"),     # 최신 표준
-                ("news", "g_news", "default"),    # 레거시 표준
-                ("news", "cbox5", "m_news"),      # 모바일
-                ("news", "g_news", "m_news")
-            ]
-            
-            for ticket, pool, tid in combos:
+            for obj_id in pref_object_ids:
                 if found_params: break
-                for obj_id in object_ids:
+                for ticket, pool in [("news", "cbox5"), ("news", "g_news")]:
                     params = {
-                        "ticket": ticket, "templateId": tid, "pool": pool,
+                        "ticket": ticket, "templateId": "default", "pool": pool,
                         "lang": "ko", "country": "KR", "objectId": obj_id,
                         "pageSize": 5, "page": 1
                     }
                     try:
                         response = self.session.get(url, params=params, headers=headers, timeout=5)
-                        # JSONP 정밀 파싱: _callback(...) 또는 json(...) 형태 대응
                         match = re.search(r'\{.*\}', response.text, re.DOTALL)
                         if not match: continue
                         data = json.loads(match.group(0))
                         
                         if data.get('success'):
-                            # API 호출 자체는 성공
-                            found_params = {"ticket": ticket, "pool": pool, "templateId": tid, "objectId": obj_id}
+                            found_params = {"ticket": ticket, "pool": pool, "objectId": obj_id}
                             if data.get('result', {}).get('count', {}).get('total', 0) > 0:
-                                break # 실데이터 존재 시 확정
+                                break
                     except: continue
 
             if not found_params:
-                found_params = {"ticket": "news", "pool": "cbox5", "templateId": "default", "objectId": object_ids[0]}
+                found_params = {"ticket": "news", "pool": "cbox5", "objectId": f"news{oid},{aid}"}
 
-            # 2. 실데이터 수집
+            # 2. 실데이터 페이징 수집
             page = 1
             while len(all_comments) < max_comments:
                 params = {
-                    "ticket": found_params["ticket"], "templateId": found_params["templateId"], 
+                    "ticket": found_params["ticket"], "templateId": "default", 
                     "pool": found_params["pool"], "objectId": found_params["objectId"],
                     "lang": "ko", "country": "KR", "pageSize": 100, "page": page, "sort": "FAVORITE"
                 }
