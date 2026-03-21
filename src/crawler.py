@@ -100,71 +100,75 @@ class NaverNewsCrawler:
             found_object_id = None
             found_pool = "g_news"
             
-            # 1. 적절한 템플릿 및 ObjectID 찾기
-            for obj_id in object_ids:
-                if found_template: break
-                for tid in templates:
-                    # 다양한 pool 후보 시도
-                    for pool in ["g_news", "g_politics", "g_society", "g_economy"]:
-                        params = {
-                            "ticket": "news", "templateId": tid, "pool": pool,
-                            "lang": "ko", "country": "KR", "objectId": obj_id,
-                            "pageSize": 100, "page": 1, "sort": "FAVORITE"
-                        }
-                        response = self.session.get(url, params=params, headers=headers, timeout=10)
-                        if response.status_code != 200: continue
-                        
-                        json_text = re.sub(r'^[^\({]+\(', '', response.text)
-                        json_text = re.sub(r'\);?\s*$', '', json_text)
-                        try:
-                            data = json.loads(json_text)
-                            if 'result' in data and data['result'].get('commentList'):
-                                found_template = tid
-                                found_object_id = obj_id
-                                found_pool = pool
-                                break
-                        except:
-                            continue
-                    if found_template: break
+            # Naver News Comment API (CBOX) 최신 규격 (2026)
+            # ticket='news', pool='cbox5', objectId='news{oid},{aid}' 조합이 표준
+            url = "https://apis.naver.com/commentBox/cbox/web_naver_list_jsonp.json"
             
-            if not found_template:
-                return []
+            # 1. 파라미터 조합 설정
+            # 시도할 object_id 후보들 (쉼표 포함 버전 우선)
+            pref_object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"] + object_ids
             
-            # 2. 페이징 처리하여 수집
-            page = 1
-            sort_types = ["FAVORITE", "NEWEST"]
-            for sort in sort_types:
-                if all_comments: break
-                while len(all_comments) < max_comments:
+            found_params = None
+            headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': f"https://n.news.naver.com/article/{oid}/{aid}"
+            })
+
+            for obj_id in pref_object_ids:
+                if found_params: break
+                for ticket, pool in [("news", "cbox5"), ("news", "g_news")]:
                     params = {
-                        "ticket": "news", "templateId": found_template, "pool": found_pool,
-                        "lang": "ko", "country": "KR", "objectId": found_object_id,
-                        "pageSize": 100, "page": page, "sort": sort
+                        "ticket": ticket, "templateId": "default", "pool": pool,
+                        "lang": "ko", "country": "KR", "objectId": obj_id,
+                        "pageSize": 5, "page": 1
                     }
-                    response = self.session.get(url, params=params, headers=headers, timeout=10)
-                    if response.status_code != 200: break
-                    
-                    json_text = re.sub(r'^[^\({]+\(', '', response.text)
-                    json_text = re.sub(r'\);?\s*$', '', json_text)
                     try:
-                        data = json.loads(json_text)
-                    except: break
+                        response = self.session.get(url, params=params, headers=headers, timeout=5)
+                        match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                        if not match: continue
+                        data = json.loads(match.group(0))
+                        
+                        if data.get('success'):
+                            found_params = {"ticket": ticket, "pool": pool, "objectId": obj_id}
+                            if data.get('result', {}).get('count', {}).get('total', 0) > 0:
+                                break
+                    except: continue
+
+            if not found_params:
+                found_params = {"ticket": "news", "pool": "cbox5", "objectId": f"news{oid},{aid}"}
+
+            # 2. 실데이터 페이징 수집
+            page = 1
+            while len(all_comments) < max_comments:
+                params = {
+                    "ticket": found_params["ticket"], "templateId": "default", 
+                    "pool": found_params["pool"], "objectId": found_params["objectId"],
+                    "lang": "ko", "country": "KR", "pageSize": 100, "page": page, "sort": "FAVORITE"
+                }
+                try:
+                    response = self.session.get(url, params=params, headers=headers, timeout=10)
+                    match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                    if not match: break
+                    data = json.loads(match.group(0))
                     
                     comment_list = data.get('result', {}).get('commentList', [])
                     if not comment_list: break
                     
                     for c in comment_list:
+                        c_id = c.get('commentNo')
+                        if any(existing.get('no') == c_id for existing in all_comments): continue
                         all_comments.append({
+                            'no': c_id,
                             'user': c.get('userName', '익명'),
                             'text': c.get('contents', ''),
                             'good': c.get('sympathyCount', 0),
                             'bad': c.get('antisympathyCount', 0),
                             'time': c.get('regTime', '')
                         })
-                    
                     if len(comment_list) < 100: break
                     page += 1
-                    time.sleep(0.1)
+                except: break
+                time.sleep(0.05)
                 
             return all_comments
         except Exception as e:

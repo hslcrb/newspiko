@@ -68,7 +68,7 @@ class NewspikoCLI:
         if self.current_source == "naver":
             comments = crawler.get_comments(details['oid'], details['aid'])
         else:
-            comments = crawler.get_comments(details.get('article_id'))
+            comments = crawler.get_comments(news['link'])
 
         print(f"{Fore.GREEN}>>> 패턴 탐색 중...")
         pattern_res = self.detector.analyze(comments)
@@ -99,7 +99,7 @@ class NewspikoCLI:
         if self.current_source == "naver":
             comments = crawler.get_comments(details['oid'], details['aid'])
         else:
-            comments = crawler.get_comments(details.get('article_id'))
+            comments = crawler.get_comments(news['link'])
 
         if not comments:
             print(f"{Fore.RED}내보낼 댓글이 없습니다.")
