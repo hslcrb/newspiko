@@ -12,16 +12,26 @@ from analyzer import NewsAnalyzer
 from config_manager import ConfigManager
 
 class AnalysisThread(QThread):
-    finished = pyqtSignal(dict) # 결과와 감성 점수를 함께 전달
+    finished = pyqtSignal(dict) # 결과와 감성 점수 전달
+    status_msg = pyqtSignal(str) # 중간 상태 브로드캐스팅
     
     def __init__(self, analyzer, article, comments):
         super().__init__()
         self.analyzer = analyzer
         self.article = article
         self.comments = comments
+        self.logs = []
 
     def run(self):
-        result_text = self.analyzer.analyze_opinion(self.article, self.comments)
+        def log_callback(msg):
+            self.logs.append(msg)
+            self.status_msg.emit(msg)
+
+        result_text = self.analyzer.analyze_opinion(
+            self.article, 
+            self.comments, 
+            status_callback=log_callback
+        )
         
         # NewsAnalyzer의 중앙 파서 사용
         parsed = self.analyzer.parse_results(result_text)
@@ -34,7 +44,8 @@ class AnalysisThread(QThread):
             "text": clean_text.strip(), 
             "sentiment": parsed["sentiment"],
             "keywords": parsed["keywords"],
-            "suspicion": parsed["suspicion"]
+            "suspicion": parsed["suspicion"],
+            "logs": self.logs # 전체 로그 전달
         })
 
 class ModernNewsApp(QMainWindow):

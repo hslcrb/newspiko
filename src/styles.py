@@ -10,6 +10,7 @@ def get_theme_css(theme="dark"):
             "--color-text": "#f8fafc",
             "--color-text-dim": "#94a3b8",
             "--color-accent": "#34d399",
+            "--color-error": "#ef4444",
             "--color-scroll-bg": "#0f172a",
             "--color-scroll-handle": "#334155"
         }
@@ -24,6 +25,7 @@ def get_theme_css(theme="dark"):
             "--color-text": "#000000",
             "--color-text-dim": "#334155",
             "--color-accent": "#059669",
+            "--color-error": "#dc2626",
             "--color-agentic": "#8b5cf6",
             "--color-scroll-bg": "#f1f5f9",
             "--color-scroll-handle": "#94a3b8"
