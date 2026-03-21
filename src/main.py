@@ -163,9 +163,12 @@ class ModernNewsApp(QMainWindow):
         analysis_header.addWidget(analysis_label)
         
         self.save_btn = QPushButton("💾 저장")
-        self.save_btn.setFixedWidth(60)
+        self.save_btn.setMinimumWidth(80) # 크기 보장
+        self.save_btn.setObjectName("saveBtn")
         self.save_btn.clicked.connect(self.save_report)
         analysis_header.addWidget(self.save_btn)
+        
+        analysis_header.addStretch() # 라벨과 버튼 사이 공간 확보
         
         self.progress = QProgressBar()
         self.progress.setVisible(False)
@@ -421,11 +424,12 @@ class ModernNewsApp(QMainWindow):
         self.sent_layout.setStretch(1, sent["neg"])
         self.sentiment_container.setVisible(True)
 
-        # 트렌드 히스토리 추가
+        # 감성 히스토리 기록 (최근 15개로 제한)
         self.sentiment_history.append(sent)
-        if len(self.sentiment_history) > 20: self.sentiment_history.pop(0)
-        
-        # 트렌드 위젯 업데이트 (작은 막대 그래프 형태)
+        if len(self.sentiment_history) > 15:
+            self.sentiment_history.pop(0)
+            
+        # 기존 바 제거
         for i in reversed(range(self.trend_layout.count())): 
             self.trend_layout.itemAt(i).widget().setParent(None)
             

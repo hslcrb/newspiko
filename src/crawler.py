@@ -108,14 +108,21 @@ class NaverNewsCrawler:
             for tid in templates:
                 params["templateId"] = tid
                 response = self.session.get(url, params=params, headers=headers, timeout=10)
+                if response.status_code != 200: continue
+                
                 json_text = re.sub(r'^[^\({]+\(', '', response.text)
                 json_text = re.sub(r'\);?\s*$', '', json_text)
-                data = json.loads(json_text)
-                if 'result' in data and data['result'].get('commentList'):
-                    found_template = tid
-                    break
+                try:
+                    data = json.loads(json_text)
+                    if 'result' in data and data['result'].get('commentList'):
+                        found_template = tid
+                        break
+                except:
+                    continue
             
-            if not found_template: return []
+            # 템플릿을 못 찾은 경우 기본값 시도
+            if not found_template:
+                found_template = "default"
             
             # 2. 페이징 처리하여 수집
             params["templateId"] = found_template
@@ -123,9 +130,14 @@ class NaverNewsCrawler:
             while len(all_comments) < max_comments:
                 params["page"] = page
                 response = self.session.get(url, params=params, headers=headers, timeout=10)
+                if response.status_code != 200: break
+                
                 json_text = re.sub(r'^[^\({]+\(', '', response.text)
                 json_text = re.sub(r'\);?\s*$', '', json_text)
-                data = json.loads(json_text)
+                try:
+                    data = json.loads(json_text)
+                except:
+                    break
                 
                 comment_list = data.get('result', {}).get('commentList', [])
                 if not comment_list: break
@@ -139,9 +151,9 @@ class NaverNewsCrawler:
                         'time': c.get('regTime', '')
                     })
                 
-                if len(comment_list) < 100: break # 마지막 페이지
+                if len(comment_list) < 100: break
                 page += 1
-                time.sleep(0.1) # 서버 부하 방지
+                time.sleep(0.1)
                 
             return all_comments
         except Exception as e:
