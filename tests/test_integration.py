@@ -1,4 +1,10 @@
 import pytest
+import sys
+import os
+
+# src 폴더 경로 추가
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from unittest.mock import patch
 from src.crawler import NaverNewsCrawler
 from src.analyzer import NewsAnalyzer

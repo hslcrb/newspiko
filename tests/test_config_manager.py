@@ -1,5 +1,10 @@
 import os
 import pytest
+import sys
+
+# src 폴더 경로 추가
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from src.config_manager import ConfigManager
 
 def test_config_encryption_decryption():
