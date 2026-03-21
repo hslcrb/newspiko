@@ -21,19 +21,21 @@ class AnalysisThread(QThread):
         self.comments = comments
 
     def run(self):
-        result = self.analyzer.analyze_opinion(self.article, self.comments)
-        # AI 결과에서 감성 점수 파싱 ([SENTIMENT: pos=XX, neg=XX, neu=XX])
-        sentiment = {"pos": 50, "neg": 50, "neu": 0}
-        import re
-        sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+)(?:,\s*neu=(\d+))?\]', result)
-        if sent_match:
-            sentiment["pos"] = int(sent_match.group(1))
-            sentiment["neg"] = int(sent_match.group(2))
-            sentiment["neu"] = int(sent_match.group(3)) if sent_match.group(3) else 0
-            # 태그 제거 (UI 청소)
-            result = result.replace(sent_match.group(0), "")
+        result_text = self.analyzer.analyze_opinion(self.article, self.comments)
         
-        self.finished.emit({"text": result, "sentiment": sentiment})
+        # NewsAnalyzer의 중앙 파서 사용
+        parsed = self.analyzer.parse_results(result_text)
+        
+        # 태그들 제거 (UI를 깨끗하게 유지하기 위해)
+        import re
+        clean_text = re.sub(r'\[(KEYWORDS|SENTIMENT|SUSPICION):.*?\]', '', result_text, flags=re.DOTALL)
+        
+        self.finished.emit({
+            "text": clean_text.strip(), 
+            "sentiment": parsed["sentiment"],
+            "keywords": parsed["keywords"],
+            "suspicion": parsed["suspicion"]
+        })
 
 class ModernNewsApp(QMainWindow):
     def __init__(self):
