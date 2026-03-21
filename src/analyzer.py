@@ -10,26 +10,10 @@ class NewsAnalyzer:
         self.client = None
         if self.api_key:
             self.client = Groq(api_key=self.api_key)
-
-    def analyze_opinion(self, article, comments):
-        if not self.client:
-            return "Groq API 키가 설정되지 않았습니다. 설정에서 입력해 주세요."
         
-        if not comments:
-            return "분석할 댓글이 없습니다."
-
-        # 대량 댓글 중 상위 100개 발췌 (토큰 제한 고려)
-        comment_text = "\n".join([f"- {c['text']}" for c in comments[:100]])
-        
-        prompt = f"""
+        # Define system_message and parse_results for the new analyze_opinion method
+        self.system_message = """
 당신은 대한민국 뉴스 및 여론 분석 전문가입니다. 다음 뉴스 기사와 댓글들을 분석하여 여론의 반응과 여론조작 의심 여부를 보고하십시오.
-
-[뉴스 제목]: {article['title']}
-[본문 요약]: {article['content'][:500]}...
-
-[수집된 댓글 목록]:
-{comment_text}
-
 분석 및 출력 지침 (반드시 다음 형식을 지키십시오):
 
 1. **핵심 요약**: 해당 뉴스와 여론의 핵심을 3줄 이내로 요약하십시오.
