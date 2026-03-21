@@ -1,10 +1,8 @@
-import os
-import sys
-import argparse
-from colorama import init, Fore, Style
-
-# src 폴더를 패키지로 인식하도록 경로 추가
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# 윈도우 한글 출력 호환성 설정
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
 
 from src.crawler import NaverNewsCrawler
 from src.crawler_daum import DaumNewsCrawler
