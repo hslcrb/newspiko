@@ -22,15 +22,15 @@ class NewsAnalyzer:
 2. 감성 점수: [SENTIMENT: pos=XX, neg=XX, neu=XX] (합계 100)
 3. 진단 지수: [SUSPICION: XX] (0~100)"""
 
-    def analyze_opinion(self, article, comments, max_retries=3):
-        """뉴스 내용과 댓글을 분석하여 여론 리포트를 생성합니다. (자동 재시도 포함)"""
+    def analyze_opinion(self, article, comments, max_retries=3, status_callback=None):
+        """뉴스 내용과 댓글을 분석하여 여론 리포트를 생성합니다. (자동 재시도 및 상태 콜백 포함)"""
         if not self.client:
             return "Groq API 키가 설정되지 않았습니다. 설정에서 입력해 주세요."
         
         if not comments:
             return "분석할 댓글이 없습니다."
 
-        # 상위 100개 댓글 발췌 (토큰 및 가독성 최적화)
+        # 상위 100개 댓글 발췌
         comment_text = "\n".join([f"- {c['text']}" for c in comments[:100]])
         
         user_prompt_base = f"""다음 뉴스 기사와 댓글들을 분석하여 보고서를 작성하십시오.
@@ -57,6 +57,9 @@ class NewsAnalyzer:
                 if last_error_feedback:
                     user_message += f"\n\n[이전 시도 오류 피드백]: {last_error_feedback}\n형식(TAG)을 반드시 엄수해서 다시 작성해줘."
 
+                if status_callback:
+                    status_callback(f"AI 분석 시도 중... ({attempt + 1}/{max_retries})")
+
                 chat_completion = self.client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": self.system_message},
@@ -72,18 +75,23 @@ class NewsAnalyzer:
                 # 결과 유효성 즉시 검증
                 parsed = self.parse_results(analysis_result)
                 
-                # 필수 데이터 유무 확인 (키워드가 없거나 감성 지수가 모두 0이면 실패로 간주)
+                # 필수 데이터 유무 확인
                 if parsed["keywords"] and sum(parsed["sentiment"].values()) > 0:
                     return analysis_result
                 else:
                     last_error_feedback = "필수 태그([KEYWORDS], [SENTIMENT], [SUSPICION]) 중 누락되었거나 형식이 잘못된 부분이 발견되었어."
-                    print(f"[AI-RETRY] Attempt {attempt+1} failed validation. Retrying...")
+                    msg = f"[AI-RETRY] 시도 {attempt+1} 결과가 규격에 맞지 않습니다. 재시도합니다."
+                    if status_callback: status_callback(msg)
+                    print(msg) # Keep print for console visibility if callback not set
                     
             except Exception as e:
-                last_error_feedback = f"API 호출 중 오류 발생: {str(e)}"
-                print(f"[AI-ERROR] Attempt {attempt+1} error: {e}")
+                error_msg = f"API 호출 중 오류 발생: {str(e)}"
+                last_error_feedback = error_msg
+                msg = f"[AI-ERROR] 시도 {attempt+1} 실패: {error_msg}"
+                if status_callback: status_callback(msg)
+                print(msg) # Keep print for console visibility if callback not set
                 
-        return "AI 분석에 실패했습니다. (최대 재시도 횟수 초과 또는 파싱 불능)"
+        return "AI 분석에 실패했습니다. (최대 재시도 횟수 초과 또는 API 오류)"
 
     def parse_results(self, text):
         """AI 응답 텍스트에서 구조화된 데이터를 추출합니다."""

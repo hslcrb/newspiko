@@ -12,16 +12,26 @@ from analyzer import NewsAnalyzer
 from config_manager import ConfigManager
 
 class AnalysisThread(QThread):
-    finished = pyqtSignal(dict) # 결과와 감성 점수를 함께 전달
+    finished = pyqtSignal(dict) # 결과와 감성 점수 전달
+    status_msg = pyqtSignal(str) # 중간 상태 브로드캐스팅
     
     def __init__(self, analyzer, article, comments):
         super().__init__()
         self.analyzer = analyzer
         self.article = article
         self.comments = comments
+        self.logs = []
 
     def run(self):
-        result_text = self.analyzer.analyze_opinion(self.article, self.comments)
+        def log_callback(msg):
+            self.logs.append(msg)
+            self.status_msg.emit(msg)
+
+        result_text = self.analyzer.analyze_opinion(
+            self.article, 
+            self.comments, 
+            status_callback=log_callback
+        )
         
         # NewsAnalyzer의 중앙 파서 사용
         parsed = self.analyzer.parse_results(result_text)
@@ -34,7 +44,8 @@ class AnalysisThread(QThread):
             "text": clean_text.strip(), 
             "sentiment": parsed["sentiment"],
             "keywords": parsed["keywords"],
-            "suspicion": parsed["suspicion"]
+            "suspicion": parsed["suspicion"],
+            "logs": self.logs # 전체 로그 전달
         })
 
 class ModernNewsApp(QMainWindow):
@@ -360,11 +371,24 @@ class ModernNewsApp(QMainWindow):
             return
 
         self.progress.setVisible(True)
-        self.analysis_view.setText("Newspiko AI 분석 엔진 가동 중...")
+        self.analysis_view.clear()
+        self.analysis_view.append("<b>[System]</b> AI 분석 엔진 가동 중...")
         
         self.thread = AnalysisThread(self.analyzer, {'title': news['title'], 'content': details['content']}, comments)
+        self.thread.status_msg.connect(self.on_analysis_status)
         self.thread.finished.connect(self.on_analysis_finished)
         self.thread.start()
+
+    def on_analysis_status(self, msg):
+        """AI 분석 중 발생하는 실시간 상태(에러 등)를 UI에 출력"""
+        color = "#34d399" # Accent green
+        if "[AI-ERROR]" in msg or "실패" in msg:
+            color = "#ef4444" # Error red
+        elif "[AI-RETRY]" in msg:
+            color = "#f59e0b" # Warning orange
+            
+        self.analysis_view.append(f'<span style="color: {color}; font-size: 13px;">{msg}</span>')
+        self.analysis_view.moveCursor(self.analysis_view.textCursor().atEnd())
 
     def on_comment_double_clicked(self, item):
         comment_text = item.data(Qt.ItemDataRole.UserRole)
@@ -434,7 +458,21 @@ class ModernNewsApp(QMainWindow):
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
         result_text = data["text"]
+        logs = data.get("logs", [])
         
+        # 에러나 재시도가 포함된 로그가 있다면 상단에 요약 표시
+        log_header = ""
+        if any("[AI-" in log for log in logs):
+            log_header = "### 📋 분석 실행 로그\n"
+            for log in logs:
+                if "[AI-ERROR]" in log:
+                    log_header += f"- ❌ {log}\n"
+                elif "[AI-RETRY]" in log:
+                    log_header += f"- 🔄 {log}\n"
+                else:
+                    log_header += f"- {log}\n"
+            log_header += "\n---\n\n"
+
         # 키워드 파싱 및 표시
         import re
         kw_match = re.search(r'\[KEYWORDS:\s*(.*?)\]', result_text)
@@ -465,7 +503,7 @@ class ModernNewsApp(QMainWindow):
         else:
             self.keyword_frame.setVisible(False)
 
-        self.analysis_view.setMarkdown(result_text)
+        self.analysis_view.setMarkdown(log_header + result_text)
         
         # 감성 시각화 업데이트
         sent = data["sentiment"]
