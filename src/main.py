@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QFrame, QSplitter, QProgressBar,
                              QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox, QFileDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QTextCursor
 from styles import get_theme_css
 from crawler import NaverNewsCrawler
 from crawler_daum import DaumNewsCrawler
@@ -388,7 +389,7 @@ class ModernNewsApp(QMainWindow):
             color = "#f59e0b" # Warning orange
             
         self.analysis_view.append(f'<span style="color: {color}; font-size: 13px;">{msg}</span>')
-        self.analysis_view.moveCursor(self.analysis_view.textCursor().atEnd())
+        self.analysis_view.moveCursor(QTextCursor.MoveOperation.End)
 
     def on_comment_double_clicked(self, item):
         comment_text = item.data(Qt.ItemDataRole.UserRole)
