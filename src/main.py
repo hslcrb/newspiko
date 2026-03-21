@@ -450,7 +450,12 @@ class ModernNewsApp(QMainWindow):
             color = "#f59e0b" # Warning orange
             
         self.analysis_view.append(f'<span style="color: {color}; font-size: 13px;">{msg}</span>')
-        self.analysis_view.moveCursor(QTextCursor.MoveOperation.End)
+        # Ensure correct MoveOperation enum access for different PyQt6 versions
+        try:
+            self.analysis_view.moveCursor(QTextCursor.MoveOperation.End)
+        except AttributeError:
+            self.analysis_view.moveCursor(QTextCursor.End)
+
 
     def on_comment_double_clicked(self, item):
         comment_text = item.data(Qt.ItemDataRole.UserRole)
