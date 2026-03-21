@@ -3,7 +3,7 @@ import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QListWidget, QTextEdit, 
                              QPushButton, QFrame, QSplitter, QProgressBar,
-                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox)
+                             QInputDialog, QMessageBox, QListWidgetItem, QCheckBox, QComboBox, QFileDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from styles import get_theme_css
 from crawler import NaverNewsCrawler
@@ -22,10 +22,17 @@ class AnalysisThread(QThread):
 
     def run(self):
         result = self.analyzer.analyze_opinion(self.article, self.comments)
-        # 간단한 감성 분석 파싱 (결과 텍스트에서 긍정/부정 수치를 찾아냄 - 모의)
-        sentiment = {"pos": 50, "neg": 50}
-        if "긍정" in result: sentiment["pos"] += 20; sentiment["neg"] -= 20
-        elif "부정" in result: sentiment["neg"] += 20; sentiment["pos"] -= 20
+        # AI 결과에서 감성 점수 파싱 ([SENTIMENT: pos=XX, neg=XX, neu=XX])
+        sentiment = {"pos": 50, "neg": 50, "neu": 0}
+        import re
+        sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+)(?:,\s*neu=(\d+))?\]', result)
+        if sent_match:
+            sentiment["pos"] = int(sent_match.group(1))
+            sentiment["neg"] = int(sent_match.group(2))
+            sentiment["neu"] = int(sent_match.group(3)) if sent_match.group(3) else 0
+            # 태그 제거 (UI 청소)
+            result = result.replace(sent_match.group(0), "")
+        
         self.finished.emit({"text": result, "sentiment": sentiment})
 
 class ModernNewsApp(QMainWindow):
@@ -163,9 +170,18 @@ class ModernNewsApp(QMainWindow):
         analysis_header.addWidget(analysis_label)
         
         self.save_btn = QPushButton("💾 저장")
-        self.save_btn.setFixedWidth(60)
+        self.save_btn.setMinimumWidth(80) # 크기 보장
+        self.save_btn.setObjectName("saveBtn")
         self.save_btn.clicked.connect(self.save_report)
         analysis_header.addWidget(self.save_btn)
+        
+        self.csv_btn = QPushButton("📊 CSV")
+        self.csv_btn.setMinimumWidth(80)
+        self.csv_btn.setObjectName("csvBtn")
+        self.csv_btn.clicked.connect(self.export_csv)
+        analysis_header.addWidget(self.csv_btn)
+        
+        analysis_header.addStretch() # 라벨과 버튼 사이 공간 확보
         
         self.progress = QProgressBar()
         self.progress.setVisible(False)
@@ -377,6 +393,42 @@ class ModernNewsApp(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "오류", f"저장 중 오류가 발생했습니다: {str(e)}")
 
+    def export_csv(self):
+        if self.comment_list_widget.count() == 0:
+            QMessageBox.warning(self, "경고", "내보낼 댓글 데이터가 없습니다.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(self, "데이터 내보내기", "", "CSV Files (*.csv)")
+        if file_path:
+            try:
+                import pandas as pd
+                data = []
+                for i in range(self.comment_list_widget.count()):
+                    raw_text = self.comment_list_widget.item(i).text()
+                    # 간단한 파싱 (display_text 형식: 👤 {user} | 🕒 {time}\n{text}\n👍 {good}  👎 {bad})
+                    lines = raw_text.split('\n')
+                    header = lines[0].split('|')
+                    user = header[0].replace('👤', '').strip()
+                    time_val = header[1].replace('🕒', '').strip()
+                    text = lines[1]
+                    reactions = lines[2].split('  ')
+                    good = reactions[0].replace('👍', '').strip()
+                    bad = reactions[1].replace('👎', '').strip()
+                    
+                    data.append({
+                        "User": user,
+                        "Time": time_val,
+                        "Comment": text,
+                        "Good": good,
+                        "Bad": bad
+                    })
+                
+                df = pd.DataFrame(data)
+                df.to_csv(file_path, index=False, encoding='utf-8-sig')
+                QMessageBox.information(self, "완료", f"데이터가 CSV로 저장되었습니다.\n{file_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "오류", f"CSV 저장 중 오류가 발생했습니다: {str(e)}")
+
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
         result_text = data["text"]
@@ -417,15 +469,20 @@ class ModernNewsApp(QMainWindow):
         sent = data["sentiment"]
         self.pos_bar.setToolTip(f"긍정 지표: {sent['pos']}%")
         self.neg_bar.setToolTip(f"부정 지표: {sent['neg']}%")
-        self.sent_layout.setStretch(0, sent["pos"])
-        self.sent_layout.setStretch(1, sent["neg"])
+        
+        # 중립(neu)이 있다면 부정을 줄이거나 별도 표시 (여기서는 긍정/부정만 바에 표시)
+        total = sent['pos'] + sent['neg']
+        if total > 0:
+            self.sent_layout.setStretch(0, sent["pos"])
+            self.sent_layout.setStretch(1, sent["neg"])
         self.sentiment_container.setVisible(True)
 
-        # 트렌드 히스토리 추가
+        # 감성 히스토리 기록 (최근 15개로 제한)
         self.sentiment_history.append(sent)
-        if len(self.sentiment_history) > 20: self.sentiment_history.pop(0)
-        
-        # 트렌드 위젯 업데이트 (작은 막대 그래프 형태)
+        if len(self.sentiment_history) > 15:
+            self.sentiment_history.pop(0)
+            
+        # 기존 바 제거
         for i in reversed(range(self.trend_layout.count())): 
             self.trend_layout.itemAt(i).widget().setParent(None)
             

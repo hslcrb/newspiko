@@ -39,17 +39,17 @@ class NewsAnalyzer:
    - 매크로, 조직적 유포, 선동성 문구 등 구체적 증거를 기반으로 '조작 의심 지수(0~100%)'를 제시하십시오.
 5. **전문가 통찰**: 해당 이슈의 향후 전개 방향 및 여론 변화 가능성을 서술하십시오.
 
-형식: 마크다운(Markdown)을 사용하여 가독성 있게 작성하십시오. 키워드 부분은 `[KEYWORDS: ...]` 형태로 포함시키십시오.
+형식: 마크다운(Markdown)을 사용하여 가독성 있게 작성하십시오. 
+- 키워드 부분은 `[KEYWORDS: ["키워드1", "키워드2", ...]]` 형태로 포함시키십시오.
+- 감성 점수는 `[SENTIMENT: pos=XX, neg=XX, neu=XX]` 형태로 마지막에 포함시키십시오. (합계 100)
 """
 
         try:
             chat_completion = self.client.chat.completions.create(
                 messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-oss-120b",
-                temperature=1,
-                max_completion_tokens=8192,
-                top_p=1,
-                extra_body={"reasoning_effort": "medium"}
+                model="llama-3.3-70b-versatile",
+                temperature=0.7,
+                max_tokens=4096,
             )
             return chat_completion.choices[0].message.content
         except Exception as e:

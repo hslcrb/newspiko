@@ -25,66 +25,91 @@ class DaumNewsCrawler:
         return session
 
     def get_ranking_news(self):
-        # 다음 뉴스 랭킹 (많이본 기사)
-        url = "https://news.daum.net/ranking/popular"
-        try:
-            response = requests.get(url, headers=self.headers, timeout=10)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            news_list = []
-            items = soup.select('.list_news2 > li')
-            for item in items:
-                title_tag = item.select_one('.link_txt')
-                press_tag = item.select_one('.info_news')
-                if title_tag:
-                    news_list.append({
-                        'press': press_tag.get_text(strip=True) if press_tag else "다음뉴스",
-                        'title': title_tag.get_text(strip=True),
-                        'link': title_tag['href']
-                    })
-            return news_list
-        except Exception as e:
-            print(f"Daum Crawler Error (Ranking): {e}")
-            return []
+        # 다음 뉴스 랭킹 (랭킹 페이지가 404일 경우 메인 페이지 활용)
+        urls = ["https://news.daum.net/ranking/popular", "https://news.daum.net/"]
+        
+        for url in urls:
+            try:
+                response = self.session.get(url, headers=self.headers, timeout=10)
+                if response.status_code != 200: continue
+                
+                soup = BeautifulSoup(response.content, 'html.parser')
+                news_list = []
+                
+                # 메인 페이지 및 랭킹 페이지 공통 셀렉터 시도
+                items = soup.select('.list_ranking > li') or \
+                        soup.select('.list_news2 > li') or \
+                        soup.select('.item_ranking') or \
+                        soup.select('.item_issue') # 메인 페이지 이슈 기사
+                
+                if not news_list:
+                    # 최후의 수단: 페이지 내든 모든 v.daum.net 링크 추출
+                    all_links = soup.find_all('a', href=re.compile(r'v\.daum\.net/v/\d+'))
+                    for a in all_links:
+                        title = a.get_text(strip=True)
+                        if len(title) > 10: # 제목다운 것만
+                            news_list.append({
+                                'press': "다음뉴스",
+                                'title': title,
+                                'link': a['href']
+                            })
+                
+                if news_list:
+                    return news_list
+            except Exception as e:
+                print(f"Daum Crawler Trial Error ({url}): {e}")
+                
+        return []
 
     def get_article_details(self, url):
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
+            response = self.session.get(url, headers=self.headers, timeout=10)
             soup = BeautifulSoup(response.content, 'html.parser')
             
             # 본문 추출
-            content_tag = soup.select_one('.article_view')
+            content_tag = soup.select_one('.article_view') or soup.select_one('#harmonyContainer') or soup.find('div', itemprop='articleBody')
             content = content_tag.get_text(strip=True) if content_tag else ""
             
-            # 다음은 URL에서 ID 추출 (예: news.v.daum.net/v/2023...)
-            article_id = url.split('/')[-1]
+            # 다음은 URL에서 ID 추출 (예: v.daum.net/v/2023...)
+            match = re.search(r'/v/(\d+)', url)
+            article_id = match.group(1) if match else url.split('/')[-1]
+            
+            # Alex용 PostID 추출 시도 (HTML 소스 내에서)
+            post_id = article_id
+            page_text = response.text
+            # common patterns: "postId":"...", "post_id":"...", data-post-id="..."
+            pid_match = re.search(r'\"postId\"\s*:\s*\"(\d+)\"', page_text) or \
+                        re.search(r'data-post-id=\"(\d+)\"', page_text) or \
+                        re.search(r'\"articleId\"\s*:\s*\"(\d+)\"', page_text)
+            if pid_match:
+                post_id = pid_match.group(1)
             
             return {
                 'content': content,
-                'oid': 'daum', # 다음은 통합 ID 사용 빈도가 높음
-                'aid': article_id
+                'article_id': post_id # 실제로 사용할 ID
             }
         except Exception as e:
             print(f"Daum Crawler Error (Details): {e}")
             return {'content': "", 'oid': "", 'aid': ""}
 
-    def get_comments(self, oid, aid, max_comments=100):
+    def get_comments(self, article_id, max_comments=100):
         # 다음(Daum) 뉴스는 'Alex' 댓글 시스템을 사용합니다.
-        # aid가 곧 post_id인 경우가 많으나, 정확하게는 페이지 소스에서 찾아야 합니다.
-        # 여기서는 aid를 post_id로 가정하고 API를 호출합니다.
+        if not article_id: return []
         
-        url = f"https://comment.daum.net/apis/v1/posts/{aid}/comments"
+        url = f"https://comment.daum.net/apis/v1/posts/{article_id}/comments"
         params = {
             "limit": min(max_comments, 100),
             "offset": 0,
-            "order": "RECOMMEND" # BEST 순
+            "order": "RECOMMEND"
         }
         
         try:
-            response = requests.get(url, params=params, headers=self.headers, timeout=10)
-            response.raise_for_status()
+            response = self.session.get(url, params=params, headers=self.headers, timeout=10)
+            if response.status_code != 200:
+                # Daum은 때로 post_id를 따로 찾아야 할 수도 있음 (article_id와 다를 때)
+                return []
+                
             data = response.json()
-            
             comments = []
             for c in data:
                 user_info = c.get('user', {})
@@ -93,7 +118,7 @@ class DaumNewsCrawler:
                     'text': c.get('content', ''),
                     'good': c.get('likeCount', 0),
                     'bad': c.get('dislikeCount', 0),
-                    'time': c.get('createdAt', '')[:10] # YYYY-MM-DD
+                    'time': c.get('createdAt', '')[:10]
                 })
             return comments
         except Exception as e:
