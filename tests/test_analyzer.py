@@ -21,6 +21,8 @@ def test_analyzer_prompt_generation():
         result = analyzer.analyze_opinion(article, comments)
         assert result == "분석 결과"
         
+        # 호출 인자 확인
+        args, kwargs = analyzer.client.chat.completions.create.call_args
         prompt = kwargs['messages'][0]['content']
         assert "제목" in prompt
         assert "댓글1" in prompt
