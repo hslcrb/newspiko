@@ -25,10 +25,12 @@ def test_analyzer_prompt_generation():
     
     with patch('groq.Groq') as mock_groq:
         analyzer.client = mock_groq()
-        analyzer.client.chat.completions.create.return_value.choices[0].message.content = "분석 결과"
+        # 유효한 태그를 포함해야 파싱 성공으로 간주되어 루프 종료됨
+        analyzer.client.chat.completions.create.return_value.choices[0].message.content = "분석 완료 [KEYWORDS: [\"A\"]] [SENTIMENT: pos=100, neg=0, neu=0] [SUSPICION: 0]"
         
         result = analyzer.analyze_opinion(article, comments)
-        assert result == "분석 결과"
+        assert "분석 완료" in result
+        assert "[KEYWORDS:" in result
         
         # 호출 인자 확인 (System Message는 0번, User Message는 1번)
         args, kwargs = analyzer.client.chat.completions.create.call_args
