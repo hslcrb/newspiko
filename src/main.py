@@ -128,6 +128,12 @@ class ModernNewsApp(QMainWindow):
 
         self.news_list_widget = QListWidget()
         self.news_list_widget.itemClicked.connect(self.on_news_selected)
+        
+        # 댓글 페이징 및 상태 관리
+        self.comment_page = 1
+        self.is_loading_more = False
+        self.current_comment_details = {"oid": None, "aid": None, "url": None}
+        self.heavy_users_cache = set()
         sidebar_layout.addWidget(self.news_list_widget)
         
         self.refresh_btn = QPushButton("피드 새로고침")
@@ -171,6 +177,7 @@ class ModernNewsApp(QMainWindow):
         
         self.comment_list_widget = QListWidget()
         self.comment_list_widget.setObjectName("commentList")
+        self.comment_list_widget.itemDoubleClicked.connect(self.on_comment_double_clicked)
         comment_layout.addWidget(self.comment_list_widget)
         right_splitter.addWidget(comment_frame)
 
@@ -324,8 +331,25 @@ class ModernNewsApp(QMainWindow):
         """)
         
         self.statusBar().showMessage("댓글 수집 중...")
-        comments = self.crawler.get_comments(details['oid'], details['aid'])
+        self.comment_page = 1
+        self.current_comment_details = {"oid": details.get('oid'), "aid": details.get('aid'), "url": news['link']}
+        
+        # 첫 페이지 로드 (Naver/Daum 구분하여 호출)
+        if hasattr(self.crawler, 'get_comments'):
+            if "naver.com" in news['link']:
+                comments = self.crawler.get_comments(details['oid'], details['aid'], page=1)
+            else:
+                comments = self.crawler.get_comments(news['link'], offset=0)
+        else:
+            comments = []
+            
         self.statusBar().showMessage(f"댓글 {len(comments)}개 수집 완료")
+
+        # 스크롤 이벤트 연결 (한 번만)
+        try:
+            self.comment_list_widget.verticalScrollBar().valueChanged.disconnect()
+        except: pass
+        self.comment_list_widget.verticalScrollBar().valueChanged.connect(self.on_comment_scroll)
 
         # 패턴 분석 (집단성 탐지 고도화)
         from pattern_detector import PatternDetector
@@ -346,26 +370,9 @@ class ModernNewsApp(QMainWindow):
         else:
             self.pattern_label.setText("✓ 특이 패턴 미감지")
 
-        # 댓글 리스트 프리티 프린트
-        for c in comments:
-            comment_item = QListWidgetItem()
-            self.comment_list_widget.addItem(comment_item)
-            
-            display_text = f"👤 {c['user']} | 🕒 {c['time']}\n{c['text']}\n👍 {c['good']}  👎 {c['bad']}"
-            comment_item.setText(display_text)
-            
-            # 중복 작성자 강조 스타일
-            if c['user'] in heavy_users:
-                comment_item.setBackground(Qt.GlobalColor.darkYellow if self.theme=="dark" else Qt.GlobalColor.yellow)
-
-            comment_item.setToolTip("클릭하여 이 댓글에 대한 상세 분석을 수행합니다.")
-            comment_item.setData(Qt.ItemDataRole.UserRole, c['text']) # 원본 텍스트 저장
-
-        # 댓글 클릭 이벤트 연결
-        try:
-            self.comment_list_widget.itemDoubleClicked.disconnect()
-        except: pass
-        self.comment_list_widget.itemDoubleClicked.connect(self.on_comment_double_clicked)
+        # 댓글 리스트 프리티 프린트 함수화 (재사용성)
+        self.heavy_users_cache = set(heavy_users)
+        self.append_comments_to_list(comments)
 
         if not self.analyzer.api_key:
             self.analysis_view.setText("Groq API 키가 설정되지 않았습니다.")
@@ -375,10 +382,64 @@ class ModernNewsApp(QMainWindow):
         self.analysis_view.clear()
         self.analysis_view.append("<b>[System]</b> AI 분석 엔진 가동 중...")
         
+        # AI 분석은 현재 수 수집된(첫 100개) 댓글을 기반으로 수행
         self.thread = AnalysisThread(self.analyzer, {'title': news['title'], 'content': details['content']}, comments)
         self.thread.status_msg.connect(self.on_analysis_status)
         self.thread.finished.connect(self.on_analysis_finished)
         self.thread.start()
+
+    def append_comments_to_list(self, comments):
+        """댓글들을 리스트 위젯에 추가"""
+        for c in comments:
+            comment_item = QListWidgetItem()
+            self.comment_list_widget.addItem(comment_item)
+            
+            display_text = f"👤 {c['user']} | 🕒 {c['time']}\n{c['text']}\n👍 {c['good']}  👎 {c['bad']}"
+            comment_item.setText(display_text)
+            
+            # 중복 작성자 강조 스타일
+            if c['user'] in self.heavy_users_cache:
+                comment_item.setBackground(Qt.GlobalColor.darkYellow if self.theme=="dark" else Qt.GlobalColor.yellow)
+
+            comment_item.setToolTip("클릭하여 이 댓글에 대한 상세 분석을 수행합니다.")
+            comment_item.setData(Qt.ItemDataRole.UserRole, c['text'])
+
+    def on_comment_scroll(self, value):
+        """스크롤이 하단 90% 지점에 도달하면 추가 로드"""
+        if self.is_loading_more: return
+        
+        bar = self.comment_list_widget.verticalScrollBar()
+        if value > bar.maximum() * 0.9:
+            self.load_more_comments()
+
+    def load_more_comments(self):
+        """다음 페이지의 댓글을 비동기적으로 로드 (현재는 단순 구현)"""
+        if self.is_loading_more: return
+        self.is_loading_more = True
+        self.statusBar().showMessage("추가 댓글 불러오는 중...")
+        
+        self.comment_page += 1
+        
+        # 여기서는 스레드 없이 직접 호출하나, 성능을 위해 나중에 스레드화 고려
+        if "naver.com" in self.current_comment_details["url"]:
+            new_comments = self.crawler.get_comments(
+                self.current_comment_details["oid"], 
+                self.current_comment_details["aid"], 
+                page=self.comment_page
+            )
+        else:
+            new_comments = self.crawler.get_comments(
+                self.current_comment_details["url"], 
+                offset=(self.comment_page - 1) * 100
+            )
+            
+        if new_comments:
+            self.append_comments_to_list(new_comments)
+            self.statusBar().showMessage(f"추가 댓글 {len(new_comments)}개 로드 완료")
+        else:
+            self.statusBar().showMessage("더 이상 불러올 댓글이 없습니다.")
+            
+        self.is_loading_more = False
 
     def on_analysis_status(self, msg):
         """AI 분석 중 발생하는 실시간 상태(에러 등)를 UI에 출력"""

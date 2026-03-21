@@ -19,7 +19,7 @@ def test_get_ranking_news_mock(crawler):
         <li><a class="list_title" href="https://test.com/1">테스트기사1</a></li>
     </div>
     """
-    with patch('requests.get') as mock_get:
+    with patch.object(crawler.session, 'get') as mock_get:
         mock_get.return_value.status_code = 200
         mock_get.return_value.content = mock_html.encode('utf-8')
         
@@ -33,7 +33,7 @@ def test_article_details_parsing(crawler):
     <div id="newsct_article">본문 내용입니다.</div>
     """
     url = "https://n.news.naver.com/article/001/0000001"
-    with patch('requests.get') as mock_get:
+    with patch.object(crawler.session, 'get') as mock_get:
         mock_get.return_value.status_code = 200
         mock_get.return_value.content = mock_html.encode('utf-8')
         
