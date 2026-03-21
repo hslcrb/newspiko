@@ -53,15 +53,34 @@ class DaumNewsCrawler:
             print(f"Daum Crawler Error (Details): {e}")
             return {'content': "", 'oid': "", 'aid': ""}
 
-    def get_comments(self, oid, aid, max_comments=300):
-        # 다음 댓글 (카카오 계정 연동 방식이므로 API 구조가 조금 다름)
-        # 실제 운영 수준에서는 카카오 API 또는 웹 소스 분석 필요
-        # 여기서는 프로토타입을 위해 상징적인 댓글 데이터 또는 가능한 수준의 수집 로직 모의
-        # 다음의 댓글은 'comment-list' API를 사용함
+    def get_comments(self, oid, aid, max_comments=100):
+        # 다음(Daum) 뉴스는 'Alex' 댓글 시스템을 사용합니다.
+        # aid가 곧 post_id인 경우가 많으나, 정확하게는 페이지 소스에서 찾아야 합니다.
+        # 여기서는 aid를 post_id로 가정하고 API를 호출합니다.
         
-        # 실제 구현은 복잡할 수 있으므로, 프로젝트 요구사항에 맞춰 Naver와 유사한 구조로 모킹하거나
-        # 동작 가능한 공개 API가 있다면 연결 (여기서는 구조적 일관성을 위해 기본 틀 제공)
-        return [
-            {'user': '다음유저1', 'text': '다음 뉴스에서도 이 이슈가 뜨겁네요.', 'good': 10, 'bad': 2, 'time': '방금 전'},
-            {'user': '다음유저2', 'text': '네이버와는 여론 분위기가 사뭇 다른 듯 합니다.', 'good': 5, 'bad': 1, 'time': '1분 전'}
-        ]
+        url = f"https://comment.daum.net/apis/v1/posts/{aid}/comments"
+        params = {
+            "limit": min(max_comments, 100),
+            "offset": 0,
+            "order": "RECOMMEND" # BEST 순
+        }
+        
+        try:
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            comments = []
+            for c in data:
+                user_info = c.get('user', {})
+                comments.append({
+                    'user': user_info.get('displayName', '익명'),
+                    'text': c.get('content', ''),
+                    'good': c.get('likeCount', 0),
+                    'bad': c.get('dislikeCount', 0),
+                    'time': c.get('createdAt', '')[:10] # YYYY-MM-DD
+                })
+            return comments
+        except Exception as e:
+            print(f"Daum Crawler Error (Comments): {e}")
+            return []
