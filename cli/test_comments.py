@@ -62,7 +62,7 @@ def test_daum():
         return
         
     print("4. Fetching comments (max 30)...")
-    comments = crawler.get_comments(article_id, max_comments=30)
+    comments = crawler.get_comments(article['link'], max_comments=30)
     
     print(f"[OK] Result: Total {len(comments)} comments collected.")
     for i, c in enumerate(comments[:3]):
