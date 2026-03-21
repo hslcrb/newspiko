@@ -82,95 +82,68 @@ class NaverNewsCrawler:
             print(f"Crawler Error (Details): {e}")
             return {'content': "", 'oid': "", 'aid': ""}
 
-    def get_comments(self, oid, aid, max_comments=500):
+    def get_comments(self, oid, aid, page=None, pageSize=100, max_comments=None):
+        """댓글 수집 (페이징 지원). page가 None이면 max_comments까지 전체 수집"""
         if not oid or not aid: return []
         
-        url = "https://apis.naver.com/comment/comment/get/v2/jsonp/commentList.json"
-        
-        # 시도해볼 ObjectID 형식들
-        object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"]
-        
         headers = self.headers.copy()
-        headers['Referer'] = f'https://n.news.naver.com/article/comment/{oid}/{aid}'
+        headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': f"https://n.news.naver.com/article/comment/{oid}/{aid}"
+        })
         
-        all_comments = []
-        try:
-            templates = ["default", "default_politics", "default_society", "default_economy"]
-            found_template = None
-            found_object_id = None
-            found_pool = "g_news"
-            
-            # Naver News Comment API (CBOX) 최신 규격 (2026)
-            # ticket='news', pool='cbox5', objectId='news{oid},{aid}' 조합이 표준
-            url = "https://apis.naver.com/commentBox/cbox/web_naver_list_jsonp.json"
-            
-            # 1. 파라미터 조합 설정
-            # 시도할 object_id 후보들 (쉼표 포함 버전 우선)
-            pref_object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"] + object_ids
-            
-            found_params = None
-            headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Referer': f"https://n.news.naver.com/article/{oid}/{aid}"
-            })
+        # 1. 파라미터 감지
+        url = "https://apis.naver.com/commentBox/cbox/web_naver_list_jsonp.json"
+        pref_object_ids = [f"news{oid},{aid}", f"news{oid}{aid}"]
+        
+        found_params = {"ticket": "news", "pool": "cbox5", "objectId": pref_object_ids[0]}
+        for obj_id in pref_object_ids:
+            params = {"ticket": "news", "templateId": "default", "pool": "cbox5", "objectId": obj_id, "pageSize": 1, "page": 1}
+            try:
+                res = self.session.get(url, params=params, headers=headers, timeout=5)
+                if 'success":true' in res.text:
+                    found_params["objectId"] = obj_id
+                    break
+            except: continue
 
-            for obj_id in pref_object_ids:
-                if found_params: break
-                for ticket, pool in [("news", "cbox5"), ("news", "g_news")]:
-                    params = {
-                        "ticket": ticket, "templateId": "default", "pool": pool,
-                        "lang": "ko", "country": "KR", "objectId": obj_id,
-                        "pageSize": 5, "page": 1
-                    }
-                    try:
-                        response = self.session.get(url, params=params, headers=headers, timeout=5)
-                        match = re.search(r'\{.*\}', response.text, re.DOTALL)
-                        if not match: continue
-                        data = json.loads(match.group(0))
-                        
-                        if data.get('success'):
-                            found_params = {"ticket": ticket, "pool": pool, "objectId": obj_id}
-                            if data.get('result', {}).get('count', {}).get('total', 0) > 0:
-                                break
-                    except: continue
-
-            if not found_params:
-                found_params = {"ticket": "news", "pool": "cbox5", "objectId": f"news{oid},{aid}"}
-
-            # 2. 실데이터 페이징 수집
-            page = 1
-            while len(all_comments) < max_comments:
-                params = {
-                    "ticket": found_params["ticket"], "templateId": "default", 
-                    "pool": found_params["pool"], "objectId": found_params["objectId"],
-                    "lang": "ko", "country": "KR", "pageSize": 100, "page": page, "sort": "FAVORITE"
-                }
-                try:
-                    response = self.session.get(url, params=params, headers=headers, timeout=10)
-                    match = re.search(r'\{.*\}', response.text, re.DOTALL)
-                    if not match: break
-                    data = json.loads(match.group(0))
-                    
-                    comment_list = data.get('result', {}).get('commentList', [])
-                    if not comment_list: break
-                    
-                    for c in comment_list:
-                        c_id = c.get('commentNo')
-                        if any(existing.get('no') == c_id for existing in all_comments): continue
-                        all_comments.append({
-                            'no': c_id,
-                            'user': c.get('userName', '익명'),
-                            'text': c.get('contents', ''),
-                            'good': c.get('sympathyCount', 0),
-                            'bad': c.get('antisympathyCount', 0),
-                            'time': c.get('regTime', '')
-                        })
-                    if len(comment_list) < 100: break
-                    page += 1
-                except: break
-                time.sleep(0.05)
+        def fetch_page(p_num):
+            params = {
+                "ticket": found_params["ticket"], "templateId": "default", 
+                "pool": found_params["pool"], "objectId": found_params["objectId"],
+                "lang": "ko", "country": "KR", "pageSize": pageSize, "page": p_num, "sort": "FAVORITE"
+            }
+            try:
+                response = self.session.get(url, params=params, headers=headers, timeout=10)
+                match = re.search(r'\{.*\}', response.text, re.DOTALL)
+                if not match: return []
+                data = json.loads(match.group(0))
+                comment_list = data.get('result', {}).get('commentList', [])
                 
-            return all_comments
-        except Exception as e:
-            print(f"Crawler Error (Comments): {e}")
-            return all_comments
+                results = []
+                for c in comment_list:
+                    results.append({
+                        'no': c.get('commentNo'),
+                        'user': c.get('userName', '익명'),
+                        'text': c.get('contents', ''),
+                        'good': c.get('sympathyCount', 0),
+                        'bad': c.get('antisympathyCount', 0),
+                        'time': c.get('regTime', '')
+                    })
+                return results
+            except: return []
+
+        if page is not None:
+            return fetch_page(page)
+        
+        # 이전 방식 호환 (전체 수집)
+        all_comments = []
+        p = 1
+        limit = max_comments or 500
+        while len(all_comments) < limit:
+            batch = fetch_page(p)
+            if not batch: break
+            all_comments.extend(batch)
+            if len(batch) < pageSize: break
+            p += 1
+            time.sleep(0.1)
+        return all_comments[:limit]
