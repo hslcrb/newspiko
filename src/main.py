@@ -182,6 +182,16 @@ class ModernNewsApp(QMainWindow):
         self.sent_layout.addWidget(self.pos_bar, 50)
         self.sent_layout.addWidget(self.neg_bar, 50)
         analysis_layout.addWidget(self.sentiment_container)
+
+        # 감성 트렌드 영역 (히스토리 차트 대용)
+        self.trend_frame = QFrame()
+        self.trend_frame.setFixedHeight(60)
+        self.trend_frame.setObjectName("trendFrame")
+        self.trend_layout = QHBoxLayout(self.trend_frame)
+        self.trend_layout.setContentsMargins(5, 5, 5, 5)
+        self.trend_layout.setSpacing(2)
+        analysis_layout.addWidget(self.trend_frame)
+        self.sentiment_history = [] # (pos, neg) 튜플 저장
         
         # 키워드 마인드맵/태그 영역 추가
         self.keyword_frame = QFrame()
@@ -381,6 +391,30 @@ class ModernNewsApp(QMainWindow):
         self.sent_layout.setStretch(0, sent["pos"])
         self.sent_layout.setStretch(1, sent["neg"])
         self.sentiment_container.setVisible(True)
+
+        # 트렌드 히스토리 추가
+        self.sentiment_history.append(sent)
+        if len(self.sentiment_history) > 20: self.sentiment_history.pop(0)
+        
+        # 트렌드 위젯 업데이트 (작은 막대 그래프 형태)
+        for i in reversed(range(self.trend_layout.count())): 
+            self.trend_layout.itemAt(i).widget().setParent(None)
+            
+        for s in self.sentiment_history:
+            bar = QFrame()
+            bar.setFixedWidth(10)
+            bar_layout = QVBoxLayout(bar)
+            bar_layout.setContentsMargins(0, 0, 0, 0)
+            bar_layout.setSpacing(0)
+            
+            p_part = QLabel()
+            p_part.setStyleSheet("background-color: #3b82f6;")
+            n_part = QLabel()
+            n_part.setStyleSheet("background-color: #ef4444;")
+            
+            bar_layout.addWidget(p_part, s['pos'])
+            bar_layout.addWidget(n_part, s['neg'])
+            self.trend_layout.addWidget(bar)
         
         self.statusBar().showMessage("분석 완료")
 
