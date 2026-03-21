@@ -8,6 +8,21 @@ class DaumNewsCrawler:
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+        self.session = self._create_session()
+
+    def _create_session(self):
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[500, 502, 503, 504]
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        return session
 
     def get_ranking_news(self):
         # 다음 뉴스 랭킹 (많이본 기사)

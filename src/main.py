@@ -157,6 +157,11 @@ class ModernNewsApp(QMainWindow):
         analysis_frame = QFrame()
         analysis_layout = QVBoxLayout(analysis_frame)
         
+        analysis_header = QHBoxLayout()
+        analysis_label = QLabel("AI 여론 통찰")
+        analysis_label.setObjectName("analysisLabel")
+        analysis_header.addWidget(analysis_label)
+        
         self.save_btn = QPushButton("💾 저장")
         self.save_btn.setFixedWidth(60)
         self.save_btn.clicked.connect(self.save_report)
@@ -441,6 +446,10 @@ class ModernNewsApp(QMainWindow):
             self.trend_layout.addWidget(bar)
         
         self.statusBar().showMessage("분석 완료")
+
+    def closeEvent(self, event):
+        self.config_mgr.save_config()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
