@@ -183,6 +183,15 @@ class ModernNewsApp(QMainWindow):
         self.sent_layout.addWidget(self.neg_bar, 50)
         analysis_layout.addWidget(self.sentiment_container)
         
+        # 키워드 마인드맵/태그 영역 추가
+        self.keyword_frame = QFrame()
+        self.keyword_frame.setObjectName("keywordFrame")
+        self.keyword_frame.setVisible(False)
+        self.keyword_layout = QHBoxLayout(self.keyword_frame)
+        self.keyword_layout.setContentsMargins(5, 5, 5, 5)
+        self.keyword_layout.setSpacing(5)
+        analysis_layout.addWidget(self.keyword_frame)
+        
         self.analysis_view = QTextEdit()
         self.analysis_view.setReadOnly(True)
         self.analysis_view.setObjectName("analysisView")
@@ -331,7 +340,39 @@ class ModernNewsApp(QMainWindow):
 
     def on_analysis_finished(self, data):
         self.progress.setVisible(False)
-        self.analysis_view.setMarkdown(data["text"])
+        result_text = data["text"]
+        
+        # 키워드 파싱 및 표시
+        import re
+        kw_match = re.search(r'\[KEYWORDS:\s*(.*?)\]', result_text)
+        if kw_match:
+            try:
+                # JSON 형식이거나 단순 쉼표 구분일 수 있음
+                kw_str = kw_match.group(1).replace("'", '"')
+                import json
+                keywords = json.loads(kw_str) if kw_str.startswith('[') else [k.strip() for k in kw_str.split(',')]
+                
+                # 기존 키워드 제거
+                for i in reversed(range(self.keyword_layout.count())): 
+                    self.keyword_layout.itemAt(i).widget().setParent(None)
+                
+                for kw in keywords[:8]: # 최대 8개
+                    kw_label = QLabel(f" #{kw} ")
+                    kw_label.setStyleSheet("""
+                        background-color: #334155; color: #38bdf8; 
+                        border-radius: 10px; padding: 2px 8px; font-weight: bold; font-size: 11px;
+                    """)
+                    self.keyword_layout.addWidget(kw_label)
+                self.keyword_frame.setVisible(True)
+                
+                # 본문에서 키워드 태그 제거 (UI 깔끔하게)
+                result_text = result_text.replace(kw_match.group(0), "")
+            except:
+                self.keyword_frame.setVisible(False)
+        else:
+            self.keyword_frame.setVisible(False)
+
+        self.analysis_view.setMarkdown(result_text)
         
         # 감성 시각화 업데이트
         sent = data["sentiment"]
