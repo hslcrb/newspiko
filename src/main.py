@@ -371,11 +371,24 @@ class ModernNewsApp(QMainWindow):
             return
 
         self.progress.setVisible(True)
-        self.analysis_view.setText("Newspiko AI 분석 엔진 가동 중...")
+        self.analysis_view.clear()
+        self.analysis_view.append("<b>[System]</b> AI 분석 엔진 가동 중...")
         
         self.thread = AnalysisThread(self.analyzer, {'title': news['title'], 'content': details['content']}, comments)
+        self.thread.status_msg.connect(self.on_analysis_status)
         self.thread.finished.connect(self.on_analysis_finished)
         self.thread.start()
+
+    def on_analysis_status(self, msg):
+        """AI 분석 중 발생하는 실시간 상태(에러 등)를 UI에 출력"""
+        color = "#34d399" # Accent green
+        if "[AI-ERROR]" in msg or "실패" in msg:
+            color = "#ef4444" # Error red
+        elif "[AI-RETRY]" in msg:
+            color = "#f59e0b" # Warning orange
+            
+        self.analysis_view.append(f'<span style="color: {color}; font-size: 13px;">{msg}</span>')
+        self.analysis_view.moveCursor(self.analysis_view.textCursor().atEnd())
 
     def on_comment_double_clicked(self, item):
         comment_text = item.data(Qt.ItemDataRole.UserRole)
