@@ -14,9 +14,9 @@ class TestCLIFlow(unittest.TestCase):
     @patch('src.crawler.NaverNewsCrawler.get_ranking_news')
     def test_list_news_naver(self, mock_get):
         mock_get.return_value = [{'press': '테스트언론', 'title': '테스트제목', 'link': 'http://test.com'}]
-        news = self.cli.list_news("naver")
-        self.assertEqual(len(news), 1)
-        self.assertEqual(news[0]['title'], '테스트제목')
+        self.cli.list_news("naver")
+        self.assertEqual(len(self.cli.current_news_list), 1)
+        self.assertEqual(self.cli.current_news_list[0]['title'], '테스트제목')
 
     @patch('src.crawler.NaverNewsCrawler.get_article_details')
     @patch('src.crawler.NaverNewsCrawler.get_comments')
@@ -26,8 +26,8 @@ class TestCLIFlow(unittest.TestCase):
         mock_comments.return_value = [{'user': 'u1', 'text': 'c1', 'good': 0, 'bad': 0, 'time': ''}]
         mock_analyze.return_value = "AI 분석 결과 [SENTIMENT: pos=50, neg=50]"
         
-        news = {'title': '제목', 'link': 'link'}
-        self.cli.analyze_news(news, "naver")
+        self.cli.current_news_list = [{'title': '제목', 'link': 'link'}]
+        self.cli.analyze_news(0)
         
         mock_analyze.assert_called_once()
         mock_comments.assert_called_once()
