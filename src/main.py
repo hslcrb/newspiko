@@ -39,7 +39,7 @@ class AnalysisThread(QThread):
         
         # 태그들 제거 (UI를 깨끗하게 유지하기 위해)
         import re
-        clean_text = re.sub(r'\[(KEYWORDS|SENTIMENT|SUSPICION):.*?\]', '', result_text, flags=re.DOTALL)
+        clean_text = re.sub(r'\[(KEYWORDS|SENTIMENT|POLITICAL_SENTIMENT|SUSPICION):.*?\]', '', result_text, flags=re.DOTALL)
         
         self.finished.emit({
             "text": clean_text.strip(), 
@@ -213,19 +213,38 @@ class ModernNewsApp(QMainWindow):
         analysis_header.addWidget(self.progress)
         analysis_layout.addLayout(analysis_header)
 
-        # 감성 시각화 바 추가
+        # 정치 성향 범례 및 라벨
+        sentiment_label_layout = QHBoxLayout()
+        self.left_label = QLabel("◀ 좌 (Left)")
+        self.left_label.setStyleSheet("color: var(--color-ml); font-weight: bold; font-size: 11px;")
+        self.right_label = QLabel("우 (Right) ▶")
+        self.right_label.setStyleSheet("color: var(--color-mr); font-weight: bold; font-size: 11px;")
+        sentiment_label_layout.addWidget(self.left_label)
+        sentiment_label_layout.addStretch()
+        sentiment_label_layout.addWidget(self.right_label)
+        analysis_layout.addLayout(sentiment_label_layout)
+
+        # 정치 성향 시각화 바 (4분할)
         self.sentiment_container = QFrame()
-        self.sentiment_container.setFixedHeight(20)
+        self.sentiment_container.setFixedHeight(24)
         self.sentiment_container.setVisible(False)
         self.sent_layout = QHBoxLayout(self.sentiment_container)
         self.sent_layout.setContentsMargins(0, 0, 0, 0)
         self.sent_layout.setSpacing(0)
-        self.pos_bar = QLabel()
-        self.pos_bar.setStyleSheet("background-color: #3b82f6; border-top-left-radius: 4px; border-bottom-left-radius: 4px;")
-        self.neg_bar = QLabel()
-        self.neg_bar.setStyleSheet("background-color: #ef4444; border-top-right-radius: 4px; border-bottom-right-radius: 4px;")
-        self.sent_layout.addWidget(self.pos_bar, 50)
-        self.sent_layout.addWidget(self.neg_bar, 50)
+        
+        self.sl_bar = QLabel()
+        self.sl_bar.setStyleSheet("background-color: var(--color-sl); border-top-left-radius: 4px; border-bottom-left-radius: 4px;")
+        self.ml_bar = QLabel()
+        self.ml_bar.setStyleSheet("background-color: var(--color-ml);")
+        self.mr_bar = QLabel()
+        self.mr_bar.setStyleSheet("background-color: var(--color-mr);")
+        self.sr_bar = QLabel()
+        self.sr_bar.setStyleSheet("background-color: var(--color-sr); border-top-right-radius: 4px; border-bottom-right-radius: 4px;")
+        
+        self.sent_layout.addWidget(self.sl_bar, 25)
+        self.sent_layout.addWidget(self.ml_bar, 25)
+        self.sent_layout.addWidget(self.mr_bar, 25)
+        self.sent_layout.addWidget(self.sr_bar, 25)
         analysis_layout.addWidget(self.sentiment_container)
 
         # 감성 트렌드 영역 (히스토리 차트 대용)
@@ -578,16 +597,19 @@ class ModernNewsApp(QMainWindow):
 
         self.analysis_view.setMarkdown(log_header + result_text)
         
-        # 감성 시각화 업데이트
+        # 정치 성향 시각화 업데이트
         sent = data["sentiment"]
-        self.pos_bar.setToolTip(f"긍정 지표: {sent['pos']}%")
-        self.neg_bar.setToolTip(f"부정 지표: {sent['neg']}%")
+        self.sl_bar.setToolTip(f"강경 좌성향: {sent['sl']}%")
+        self.ml_bar.setToolTip(f"온건 좌성향: {sent['ml']}%")
+        self.mr_bar.setToolTip(f"온건 우성향: {sent['mr']}%")
+        self.sr_bar.setToolTip(f"강경 우성향: {sent['sr']}%")
         
-        # 중립(neu)이 있다면 부정을 줄이거나 별도 표시 (여기서는 긍정/부정만 바에 표시)
-        total = sent['pos'] + sent['neg']
+        total = sum(sent.values())
         if total > 0:
-            self.sent_layout.setStretch(0, sent["pos"])
-            self.sent_layout.setStretch(1, sent["neg"])
+            self.sent_layout.setStretch(0, sent["sl"])
+            self.sent_layout.setStretch(1, sent["ml"])
+            self.sent_layout.setStretch(2, sent["mr"])
+            self.sent_layout.setStretch(3, sent["sr"])
         self.sentiment_container.setVisible(True)
 
         # 감성 히스토리 기록 (최근 15개로 제한)
@@ -606,13 +628,19 @@ class ModernNewsApp(QMainWindow):
             bar_layout.setContentsMargins(0, 0, 0, 0)
             bar_layout.setSpacing(0)
             
-            p_part = QLabel()
-            p_part.setStyleSheet("background-color: #3b82f6;")
-            n_part = QLabel()
-            n_part.setStyleSheet("background-color: #ef4444;")
+            sl_part = QLabel()
+            sl_part.setStyleSheet("background-color: var(--color-sl);")
+            ml_part = QLabel()
+            ml_part.setStyleSheet("background-color: var(--color-ml);")
+            mr_part = QLabel()
+            mr_part.setStyleSheet("background-color: var(--color-mr);")
+            sr_part = QLabel()
+            sr_part.setStyleSheet("background-color: var(--color-sr);")
             
-            bar_layout.addWidget(p_part, s['pos'])
-            bar_layout.addWidget(n_part, s['neg'])
+            bar_layout.addWidget(sl_part, s['sl'])
+            bar_layout.addWidget(ml_part, s['ml'])
+            bar_layout.addWidget(mr_part, s['mr'])
+            bar_layout.addWidget(sr_part, s['sr'])
             self.trend_layout.addWidget(bar)
         
         self.statusBar().showMessage("분석 완료")
