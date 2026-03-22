@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class NewsAnalyzer:
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, model="llama-3.3-70b-versatile"):
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
+        self.model = model
         self.client = None
         if self.api_key:
             self.client = Groq(api_key=self.api_key)
@@ -65,7 +66,7 @@ class NewsAnalyzer:
                         {"role": "system", "content": self.system_message},
                         {"role": "user", "content": user_message}
                     ],
-                    model="llama-3.3-70b-versatile",
+                    model=self.model,
                     temperature=0.2,
                     max_tokens=4096,
                 )

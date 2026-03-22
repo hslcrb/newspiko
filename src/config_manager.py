@@ -58,6 +58,7 @@ class ConfigManager:
         default = {
             "groq_api_key": "",
             "theme": "dark",
+            "model": "llama-3.3-70b-versatile",
             "last_section": 100
         }
         self.save_config(default)

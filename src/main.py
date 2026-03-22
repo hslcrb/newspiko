@@ -57,7 +57,10 @@ class ModernNewsApp(QMainWindow):
         self.daum_crawler = DaumNewsCrawler()
         self.crawler = self.naver_crawler
         
-        self.analyzer = NewsAnalyzer(api_key=self.config_mgr.get("groq_api_key"))
+        self.analyzer = NewsAnalyzer(
+            api_key=self.config_mgr.get("groq_api_key"),
+            model=self.config_mgr.get("model", "llama-3.3-70b-versatile")
+        )
         self.current_news_list = []
         self.theme = self.config_mgr.get("theme", "dark")
         self.agentic_active = self.config_mgr.get("agentic_active", False)
@@ -286,7 +289,10 @@ class ModernNewsApp(QMainWindow):
         key, ok = QInputDialog.getText(self, "API Key", "Groq API Key를 입력하세요:", text=current_key)
         if ok and key:
             self.config_mgr.set("groq_api_key", key)
-            self.analyzer = NewsAnalyzer(api_key=key)
+            self.analyzer = NewsAnalyzer(
+                api_key=key, 
+                model=self.config_mgr.get("model", "llama-3.3-70b-versatile")
+            )
             QMessageBox.information(self, "완료", "API 키가 안전하게 저장되었습니다.")
 
     def load_news(self):
