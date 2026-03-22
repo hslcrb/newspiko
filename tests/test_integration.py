@@ -34,7 +34,7 @@ def test_full_pipeline_mock():
         analyzer.client = mock_groq()
         analyzer.client.chat.completions.create.return_value.choices[0].message.content = """
 [KEYWORDS: ["테스트", "통합", "성공"]]
-[SENTIMENT: pos=50, neg=20, neu=30]
+[POLITICAL_SENTIMENT: sl=25, ml=25, mr=25, sr=25]
 [SUSPICION: 30]
 [SUMMARY]
 통합 테스트 성공 리포트입니다.
