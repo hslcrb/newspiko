@@ -91,8 +91,9 @@ class NewspikoCLI:
         print(f"\n{Fore.YELLOW}📋 [구조 분석 요약]")
         print(f"- 주요 키워드: {', '.join(parsing_res['keywords'][:5])}")
         print(f"- AI 진단 지수: {parsing_res['suspicion']}/100")
-        sent = parsing_res['sentiment']
-        print(f"- 감성 분포: 긍정({sent['pos']}%), 부정({sent['neg']}%), 관망({sent['neu']}%)")
+        s = parsing_res['sentiment']
+        print(f"- 정치 성향 분포:")
+        print(f"  {Fore.BLUE}◀ [강경 좌: {s['sl']}%] [온건 좌: {s['ml']}%]{Style.RESET_ALL} | {Fore.RED}[온건 우: {s['mr']}%] [강경 우: {s['sr']}%] ▶{Style.RESET_ALL}")
 
     def export_csv(self, idx, filename):
         if not (0 <= idx < len(self.current_news_list)):

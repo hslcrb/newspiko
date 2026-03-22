@@ -24,7 +24,7 @@ class TestCLIFlow(unittest.TestCase):
     def test_analyze_flow(self, mock_analyze, mock_comments, mock_details):
         mock_details.return_value = {'content': '본문내용', 'oid': '123', 'aid': '456'}
         mock_comments.return_value = [{'user': 'u1', 'text': 'c1', 'good': 0, 'bad': 0, 'time': ''}]
-        mock_analyze.return_value = "AI 분석 결과 [SENTIMENT: pos=50, neg=50]"
+        mock_analyze.return_value = "AI 분석 결과 [POLITICAL_SENTIMENT: sl=25, ml=25, mr=25, sr=25]"
         
         self.cli.current_news_list = [{'title': '제목', 'link': 'link'}]
         self.cli.analyze_news(0)
