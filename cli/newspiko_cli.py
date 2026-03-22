@@ -25,17 +25,23 @@ class NewspikoCLI:
         self.config_mgr = ConfigManager(config_path="config.dat", key_path=".secret.key")
         self.naver_crawler = NaverNewsCrawler()
         self.daum_crawler = DaumNewsCrawler()
-        self.analyzer = NewsAnalyzer(api_key=self.config_mgr.get("groq_api_key"))
+        self.analyzer = NewsAnalyzer(
+            api_key=self.config_mgr.get("groq_api_key"),
+            model=self.config_mgr.get("model")
+        )
         self.detector = PatternDetector()
         self.current_news_list = []
         self.current_source = "naver"
+        self.analysis_history = []  # 트렌드 분석용 히스토리 추가
 
     def print_help(self):
         print(f"\n{Fore.CYAN}=== Newspiko CLI 명령어 안내 ===")
         print(f"{Fore.WHITE}/naver             - 네이버 뉴스 랭킹 로드")
         print(f"{Fore.WHITE}/daum              - 다음 뉴스 랭킹 로드")
         print(f"{Fore.WHITE}/analyze <번호>    - 해당 번호 뉴스 AI 분석")
+        print(f"{Fore.WHITE}/trend             - 현재 세션 분석 트렌드 보기")
         print(f"{Fore.WHITE}/export <번호> <명> - 댓글 데이터를 CSV로 내보내기")
+        print(f"{Fore.WHITE}/model <name>      - 분석 모델 변경 (예: openai/gpt-oss-120b)")
         print(f"{Fore.WHITE}/api <key>         - Groq API 키 저장")
         print(f"{Fore.WHITE}/help              - 도움말 출력")
         print(f"{Fore.WHITE}/quit              - 종료")
@@ -94,6 +100,13 @@ class NewspikoCLI:
         s = parsing_res['sentiment']
         print(f"- 정치 성향 분포:")
         print(f"  {Fore.BLUE}◀ [강경 좌: {s['sl']}%] [온건 좌: {s['ml']}%]{Style.RESET_ALL} | {Fore.RED}[온건 우: {s['mr']}%] [강경 우: {s['sr']}%] ▶{Style.RESET_ALL}")
+        
+        # 히스토리에 기록
+        self.analysis_history.append({
+            "title": news['title'],
+            "sentiment": s,
+            "suspicion": parsing_res['suspicion']
+        })
 
     def export_csv(self, idx, filename):
         if not (0 <= idx < len(self.current_news_list)):
@@ -119,6 +132,22 @@ class NewspikoCLI:
         if not filename.endswith(".csv"): filename += ".csv"
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         print(f"{Fore.GREEN}>>> 성공적으로 저장되었습니다: {filename}")
+
+    def show_trend(self):
+        if not self.analysis_history:
+            print(f"{Fore.RED}아직 분석된 데이터가 없습니다.")
+            return
+        
+        print(f"\n{Fore.CYAN}=== [현재 세션 분석 트렌드 요약] ===")
+        for i, entry in enumerate(self.analysis_history, 1):
+            s = entry['sentiment']
+            # 성향 우세 판단
+            left = s['sl'] + s['ml']
+            right = s['mr'] + s['sr']
+            lean = f"{Fore.BLUE}좌향({left}%)" if left > right else f"{Fore.RED}우향({right}%)" if right > left else f"{Fore.WHITE}중립"
+            
+            print(f"{i:2}. {entry['title'][:30]}...")
+            print(f"    - 성향: {lean} {Style.RESET_ALL}| 의심 지수: {entry['suspicion']}")
 
 def main():
     cli = NewspikoCLI()
@@ -150,10 +179,26 @@ def main():
                 if len(args) >= 2:
                     cli.export_csv(int(args[0]) - 1, args[1])
                 else: print(f"{Fore.RED}사용법: /export <번호> <파일명>")
+            elif cmd == "/trend":
+                cli.show_trend()
+            elif cmd == "/model":
+                if args:
+                    cli.config_mgr.set("model", args[0])
+                    cli.analyzer = NewsAnalyzer(
+                        api_key=cli.config_mgr.get("groq_api_key"),
+                        model=args[0]
+                    )
+                    print(f"{Fore.CYAN}분석 모델이 변경되었습니다: {args[0]}")
+                else:
+                    current_model = cli.config_mgr.get("model", "llama-3.3-70b-versatile")
+                    print(f"{Fore.YELLOW}현재 모델: {current_model}")
             elif cmd == "/api":
                 if args:
                     cli.config_mgr.set("groq_api_key", args[0])
-                    cli.analyzer = NewsAnalyzer(api_key=args[0])
+                    cli.analyzer = NewsAnalyzer(
+                        api_key=args[0],
+                        model=cli.config_mgr.get("model")
+                    )
                     print(f"{Fore.CYAN}API 키가 저장되었습니다.")
                 else: print(f"{Fore.RED}키를 입력하세요. 예: /api gsk_...")
             else:
