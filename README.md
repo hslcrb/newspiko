@@ -75,3 +75,7 @@
 
 ## 🤝 기여하기
 버그 보고, 기능 제안 및 Pull Request는 언제나 환영합니다!
+
+---
+
+**Copyright (c) Rheehose (Rhee Creative) 2008-2026**
