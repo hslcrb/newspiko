@@ -39,7 +39,7 @@ class AnalysisThread(QThread):
         
         # 태그들 제거 (UI를 깨끗하게 유지하기 위해)
         import re
-        clean_text = re.sub(r'\[(KEYWORDS|SENTIMENT|SUSPICION):.*?\]', '', result_text, flags=re.DOTALL)
+        clean_text = re.sub(r'\[(KEYWORDS|SENTIMENT|POLITICAL_SENTIMENT|SUSPICION):.*?\]', '', result_text, flags=re.DOTALL)
         
         self.finished.emit({
             "text": clean_text.strip(), 
