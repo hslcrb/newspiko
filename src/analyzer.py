@@ -20,7 +20,11 @@ class NewsAnalyzer:
 
 반드시 다음 태그를 포함하여 데이터를 규격화하십시오 (파싱 엔진에서 사용됨):
 1. 마인드맵: [KEYWORDS: ["키워드1", "키워드2", ...]]
-2. 감성 점수: [SENTIMENT: pos=XX, neg=XX, neu=XX] (합계 100)
+2. 정치 성향 분석: [POLITICAL_SENTIMENT: sl=XX, ml=XX, mr=XX, sr=XX] (합계 100)
+       - sl: Strong Left (강경 좌/진한 파랑)
+       - ml: Moderate Left (온건 좌/연한 파랑)
+       - mr: Moderate Right (온건 우/연한 빨강)
+       - sr: Strong Right (강경 우/진한 빨강)
 3. 진단 지수: [SUSPICION: XX] (0~100)"""
 
     def analyze_opinion(self, article, comments, max_retries=3, status_callback=None):
@@ -45,7 +49,7 @@ class NewsAnalyzer:
 분석 항목:
 1. 핵심 요약 (3줄 이내)
 2. 마인드맵 키워드 추출 (지정된 TAG 내 JSON 배열 형식)
-3. 감성 분석 (긍정/부정/관망 비율 산출)
+3. 정치 성향 분석 (좌/우 및 강경/온건 비율 산출)
 4. 여론조작 및 집단성 진단 (구체적 근거와 함께 SUSPICION 지수 제시)
 5. 전문가 통찰 (향후 전개 방향 및 여론 변화 가능성)
 """
@@ -80,7 +84,7 @@ class NewsAnalyzer:
                 if parsed["keywords"] and sum(parsed["sentiment"].values()) > 0:
                     return analysis_result
                 else:
-                    last_error_feedback = "필수 태그([KEYWORDS], [SENTIMENT], [SUSPICION]) 중 누락되었거나 형식이 잘못된 부분이 발견되었어."
+                    last_error_feedback = "필수 태그([KEYWORDS], [POLITICAL_SENTIMENT], [SUSPICION]) 중 누락되었거나 형식이 잘못된 부분이 발견되었어."
                     msg = f"[AI-RETRY] 시도 {attempt+1} 결과가 규격에 맞지 않습니다. 재시도합니다."
                     if status_callback: status_callback(msg)
                     print(msg) # Keep print for console visibility if callback not set
@@ -98,7 +102,7 @@ class NewsAnalyzer:
         """AI 응답 텍스트에서 구조화된 데이터를 추출합니다."""
         results = {
             "keywords": [],
-            "sentiment": {"pos": 0, "neg": 0, "neu": 0},
+            "sentiment": {"sl": 0, "ml": 0, "mr": 0, "sr": 0},
             "suspicion": 0
         }
         
@@ -112,13 +116,14 @@ class NewsAnalyzer:
                     raw_items = re.findall(r'"([^"]*)"', kw_match.group(1))
                     results["keywords"] = [item for item in raw_items if item.strip()]
                 
-            # 2. 감성 점수 추출
-            sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+),\s*neu=(\d+)\]', text, re.IGNORECASE)
-            if sent_match:
+            # 2. 정치 성향 점수 추출
+            pol_match = re.search(r'\[POLITICAL_SENTIMENT:\s*sl=(\d+),\s*ml=(\d+),\s*mr=(\d+),\s*sr=(\d+)\]', text, re.IGNORECASE)
+            if pol_match:
                 results["sentiment"] = {
-                    "pos": int(sent_match.group(1)),
-                    "neg": int(sent_match.group(2)),
-                    "neu": int(sent_match.group(3))
+                    "sl": int(pol_match.group(1)),
+                    "ml": int(pol_match.group(2)),
+                    "mr": int(pol_match.group(3)),
+                    "sr": int(pol_match.group(4))
                 }
                 
             # 3. 의심 지수 추출
