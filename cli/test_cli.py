@@ -27,7 +27,9 @@ class TestCLIFlow(unittest.TestCase):
         mock_analyze.return_value = "AI 분석 결과 [SENTIMENT: pos=50, neg=30, neu=20]"
         
         self.cli.current_news_list = [{'title': '제목', 'link': 'link'}]
-        self.cli.analyze_news(0)
+        with patch('openai.OpenAI') as mock_openai:
+            self.cli.analyzer.client = mock_openai()
+            self.cli.analyze_news(0)
         
         mock_analyze.assert_called_once()
         mock_comments.assert_called_once()

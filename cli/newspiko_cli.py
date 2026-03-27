@@ -208,7 +208,7 @@ def main():
                     )
                     print(f"{Fore.CYAN}분석 모델이 변경되었습니다: {args[0]}")
                 else:
-                    current_model = cli.config_mgr.get("model", "llama-3.3-70b-versatile")
+                    current_model = cli.config_mgr.get("model", "openai/gpt-oss-120b")
                     print(f"{Fore.YELLOW}현재 모델: {current_model}")
             elif cmd == "/api":
                 if args:

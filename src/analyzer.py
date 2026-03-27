@@ -1,18 +1,16 @@
 import os
 import re
 import json
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class NewsAnalyzer:
-    def __init__(self, api_key=None, model="llama-3.3-70b-versatile"):
-        self.api_key = api_key or os.getenv("GROQ_API_KEY")
+    def __init__(self, api_key=None, model="openai/gpt-oss-120b"):
+        self.api_key = api_key or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
         self.model = model
         self.client = None
-        if self.api_key:
-            self.client = Groq(api_key=self.api_key)
         
         self.system_message = """당신은 대한민국 뉴스 및 여론 분석 전문가입니다. 
 당신은 오직 분석 보고서만을 마크다운 형식으로 출력해야 하며, 서론이나 결론 등 잡담을 절대 섞지 마십시오.
@@ -26,10 +24,32 @@ class NewsAnalyzer:
        - neu: Neutral (관망/중립)
 3. 진단 지수: [SUSPICION: XX] (0~100)"""
 
+    def _get_client(self):
+        if self.client:
+            return self.client
+        
+        if not self.api_key:
+            return None
+            
+        try:
+            # Groq 키인 경우 OpenAI 호환 엔드포인트 사용
+            if self.api_key.startswith("gsk_"):
+                self.client = OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.groq.com/openai/v1"
+                )
+            else:
+                self.client = OpenAI(api_key=self.api_key)
+            return self.client
+        except Exception as e:
+            print(f"클라이언트 초기화 오류: {e}")
+            return None
+
     def analyze_opinion(self, article, comments, max_retries=3, status_callback=None):
         """뉴스 내용과 댓글을 분석하여 여론 리포트를 생성합니다. (자동 재시도 및 상태 콜백 포함)"""
-        if not self.client:
-            return "Groq API 키가 설정되지 않았습니다. 설정에서 입력해 주세요."
+        client = self._get_client()
+        if not client:
+            return "API 키가 설정되지 않았습니다. 설정에서 입력해 주세요."
         
         if not comments:
             return "분석할 댓글이 없습니다."
@@ -64,7 +84,7 @@ class NewsAnalyzer:
                 if status_callback:
                     status_callback(f"AI 분석 시도 중... ({attempt + 1}/{max_retries})")
 
-                chat_completion = self.client.chat.completions.create(
+                chat_completion = client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": self.system_message},
                         {"role": "user", "content": user_message}

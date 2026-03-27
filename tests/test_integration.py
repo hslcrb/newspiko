@@ -25,13 +25,13 @@ def test_full_pipeline_mock():
          patch.object(NaverNewsCrawler, 'get_ranking_news', return_value=mock_news), \
          patch.object(NaverNewsCrawler, 'get_article_details', return_value=mock_details), \
          patch.object(NaverNewsCrawler, 'get_comments', return_value=mock_comments), \
-         patch('groq.Groq') as mock_groq:
+         patch('openai.OpenAI') as mock_openai:
              
         # Analyzer 모킹
         analyzer = NewsAnalyzer(api_key=cm.get("groq_api_key"))
         if not analyzer.api_key:
             analyzer.api_key = "fake_key"
-        analyzer.client = mock_groq()
+        analyzer.client = mock_openai()
         analyzer.client.chat.completions.create.return_value.choices[0].message.content = """
 [KEYWORDS: ["테스트", "통합", "성공"]]
 [SENTIMENT: pos=50, neg=30, neu=20]
