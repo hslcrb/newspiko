@@ -1,47 +1,21 @@
-# Newspiko: 고성능 네이버 뉴스 여론 분석 에이전트
+# Git Restoration Walkthrough
 
-Newspiko는 네이버 뉴스의 실시간 랭킹 뉴스를 수집하고, AI를 통해 여론의 흐름과 조작 의심 여부를 정밀 분석하는 전문가용 도구입니다.
+Successfully restored the repository state to commit `fd20ee6` while preserving all git history.
 
-## 주요 기능 (V1 상용화 버전)
-- **멀티 소스 크롤링**: Naver News 뿐만 아니라 Daum News의 랭킹 및 실시간 댓글을 수집합니다.
-- **고도화된 집단성 탐지**: 중복 작성자 및 유사 문구(매크로) 집단의 활동을 AI가 정밀 분석합니다.
-- **실시간 감성 인사이트**: AI가 정교하게 산출한 긍정/부정/중립(Sentiment) 수치를 실시간 시각화합니다.
-- **데이터 익스포트**: 분석 리포트(PDF/TXT) 뿐만 아니라 수집된 전체 댓글 데이터를 CSV 형식으로 내보낼 수 있습니다.
-- **마인드맵 키워드**: AI가 추출한 핵심 키워드를 태그 클라우드 형태로 제공합니다.
+## Changes Made
 
-## 설치 및 실행
-1. 가상환경 활성화: `.\venv\Scripts\activate`
-2. 의존성 설치: `pip install -r requirements.txt` (또는 수동 설치)
-3. API 설정: 프로젝트 루트에 `.env` 파일을 생성하고 `GROQ_API_KEY=your_key_here`를 입력합니다. (GitHub 보안 정책에 따라 소스 코드 내 하드코딩은 금지됩니다.)
-4. 실행: `python src/main.py`
-5. 배포 빌드: `python build_exe.py` 실행 시 정적 `.exe` 파일 생성
+- **Restoration**: Copied all files from commit `fd20ee6` to the current working directory.
+- **Commit**: Created a new commit `f1857ae` with the message "Restore state to fd20ee6".
 
-## 보안 및 설정 관리
-- **설정 자동 탐지**: 앱 실행 시 `config.dat` 파일을 자동 탐지 및 생성.
-- **강력한 암호화**: `Fernet` 알고리즘을 통한 API 키 암호화 및 `zlib` 압축 처리.
-- **비밀 키 은닉**: `.secret.key` 파일을 통한 별도 보안 관리.
+## Verification
 
-## 🛠 실행 방법
+- **Git Log**: Checked `git log -1` to confirm the new commit was created.
+- **File State**: The current working directory now matches the state of `fd20ee6`.
 
-### GUI 버전 실행
-```powershell
-.\venv\Scripts\python src/main.py
+```bash
+commit f1857aeb03e59530153e023c0de4b95667ecc526
+Author: Rheehose <sea35652@gmail.com>
+Date:   Sun Mar 22 15:26:18 2026 +0900
+
+    Restore state to fd20ee6
 ```
-
-### CLI 버전 실행 (명령어 기반)
-```powershell
-.\venv\Scripts\python cli/newspiko_cli.py
-```
-- **/naver / /daum**: 뉴스 리스트 로드
-- **/analyze <번호>**: 기사 상세 분석 및 AI 통찰 조회
-- **/export <번호> <파일명>**: 댓글 데이터를 CSV로 저장
-- **/api <키>**: Groq API 키 설정
-- **/help**: 명령어 안내
-- **/quit**: 종료
-
-## 🎨 UI 가이드
-- **사이드바 상단 테마 버튼 (◑)**: 다크 모드와 라이트 모드를 자유롭게 전환합니다.
-- **설정 저장**: 선택한 테마와 API 키는 암호화되어 로컬에 안전하게 저장되며, 다음 실행 시 자동으로 불러옵니다.
-
----
-**Newspiko**와 함께 더 투명하고 정밀한 뉴스 분석을 경험해 보세요.
