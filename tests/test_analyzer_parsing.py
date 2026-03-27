@@ -16,17 +16,16 @@ class TestAnalyzerParsing(unittest.TestCase):
 ### 분석 보고서
 요약: 테스트 뉴스입니다.
 [KEYWORDS: ["애플", "아이폰", "출시"]]
-[POLITICAL_SENTIMENT: sl=40, ml=30, mr=20, sr=10]
+[SENTIMENT: pos=70, neg=20, neu=10]
 [SUSPICION: 15]
 전문가 의견: 좋습니다.
 """
         results = self.analyzer.parse_results(sample_text)
         
         self.assertEqual(results["keywords"], ["애플", "아이폰", "출시"])
-        self.assertEqual(results["sentiment"]["sl"], 40)
-        self.assertEqual(results["sentiment"]["ml"], 30)
-        self.assertEqual(results["sentiment"]["mr"], 20)
-        self.assertEqual(results["sentiment"]["sr"], 10)
+        self.assertEqual(results["sentiment"]["pos"], 70)
+        self.assertEqual(results["sentiment"]["neg"], 20)
+        self.assertEqual(results["sentiment"]["neu"], 10)
         self.assertEqual(results["suspicion"], 15)
 
     def test_parse_results_with_whitespace(self):
@@ -39,7 +38,7 @@ class TestAnalyzerParsing(unittest.TestCase):
         results = self.analyzer.parse_results(sample_text)
         
         self.assertEqual(results["keywords"], [])
-        self.assertEqual(results["sentiment"]["sl"], 0)
+        self.assertEqual(results["sentiment"]["pos"], 0)
         self.assertEqual(results["suspicion"], 0)
 
     def test_parse_results_malformed_json(self):

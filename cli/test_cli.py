@@ -24,7 +24,7 @@ class TestCLIFlow(unittest.TestCase):
     def test_analyze_flow(self, mock_analyze, mock_comments, mock_details):
         mock_details.return_value = {'content': '본문내용', 'oid': '123', 'aid': '456'}
         mock_comments.return_value = [{'user': 'u1', 'text': 'c1', 'good': 0, 'bad': 0, 'time': ''}]
-        mock_analyze.return_value = "AI 분석 결과 [POLITICAL_SENTIMENT: sl=25, ml=25, mr=25, sr=25]"
+        mock_analyze.return_value = "AI 분석 결과 [SENTIMENT: pos=50, neg=30, neu=20]"
         
         self.cli.current_news_list = [{'title': '제목', 'link': 'link'}]
         self.cli.analyze_news(0)
@@ -51,13 +51,13 @@ class TestCLIFlow(unittest.TestCase):
     def test_trend_command(self):
         """/trend 명령어가 히스토리를 정상 출력하는지 확인"""
         self.cli.analysis_history = [
-            {"title": "T1", "sentiment": {"sl": 100, "ml": 0, "mr": 0, "sr": 0}, "suspicion": 10}
+            {"title": "T1", "sentiment": {"pos": 100, "neg": 0, "neu": 0}, "suspicion": 10}
         ]
         with patch('sys.stdout', new_callable=MagicMock()) as mock_stdout:
             self.cli.show_trend()
             output = "".join([call.args[0] for call in mock_stdout.write.call_args_list])
             self.assertIn("T1", output)
-            self.assertIn("좌향", output)
+            self.assertIn("긍정", output)
 
 if __name__ == "__main__":
     unittest.main()

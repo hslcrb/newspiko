@@ -19,7 +19,7 @@ def test_analyzer_status_callback():
     # 1회차 실패(형식 오류), 2회차 성공 시뮬레이션
     mock_responses = [
         MagicMock(choices=[MagicMock(message=MagicMock(content="형식 없는 응답"))]),
-        MagicMock(choices=[MagicMock(message=MagicMock(content="[KEYWORDS: [\"A\"]] [POLITICAL_SENTIMENT: sl=100, ml=0, mr=0, sr=0] [SUSPICION: 0]"))])
+        MagicMock(choices=[MagicMock(message=MagicMock(content="[KEYWORDS: [\"A\"]] [SENTIMENT: pos=100, neg=0, neu=0] [SUSPICION: 0]"))])
     ]
     analyzer.client.chat.completions.create.side_effect = mock_responses
     
@@ -36,9 +36,9 @@ def test_analyzer_status_callback():
 def test_analysis_thread_signals():
     """AnalysisThread가 중간 상태와 최종 로그를 정상 배출하는지 확인"""
     analyzer = MagicMock()
-    analyzer.analyze_opinion.return_value = "[KEYWORDS: ['X']] [POLITICAL_SENTIMENT: sl=50, ml=0, mr=50, sr=0] [SUSPICION: 10]"
+    analyzer.analyze_opinion.return_value = "[KEYWORDS: ['X']] [SENTIMENT: pos=50, neg=50, neu=0] [SUSPICION: 10]"
     analyzer.parse_results.return_value = {
-        "keywords": ["X"], "sentiment": {"sl": 50, "ml": 0, "mr": 50, "sr": 0}, "suspicion": 10
+        "keywords": ["X"], "sentiment": {"pos": 50, "neg": 50, "neu": 0}, "suspicion": 10
     }
     
     # analyzer 내부에서 콜백을 호출하도록 모킹

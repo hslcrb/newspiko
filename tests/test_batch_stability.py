@@ -39,7 +39,7 @@ def test_batch_stability():
         with patch.object(analyzer, 'analyze_opinion') as mock_analyze:
             mock_analyze.return_value = """
 [KEYWORDS: ["배치", "테스트", "성공"]]
-[POLITICAL_SENTIMENT: sl=40, ml=40, mr=10, sr=10]
+[SENTIMENT: pos=50, neg=30, neu=20]
 [SUSPICION: 10]
 [SUMMARY]
 배치 안정성 테스트 가상 리포트입니다.
