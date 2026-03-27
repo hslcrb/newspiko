@@ -25,16 +25,16 @@ def test_full_pipeline_mock():
          patch.object(NaverNewsCrawler, 'get_ranking_news', return_value=mock_news), \
          patch.object(NaverNewsCrawler, 'get_article_details', return_value=mock_details), \
          patch.object(NaverNewsCrawler, 'get_comments', return_value=mock_comments), \
-         patch('openai.OpenAI') as mock_openai:
+         patch('groq.Groq') as mock_groq:
              
         # Analyzer 모킹
         analyzer = NewsAnalyzer(api_key=cm.get("groq_api_key"))
         if not analyzer.api_key:
             analyzer.api_key = "fake_key"
-        analyzer.client = mock_openai()
+        analyzer.client = mock_groq()
         analyzer.client.chat.completions.create.return_value.choices[0].message.content = """
 [KEYWORDS: ["테스트", "통합", "성공"]]
-[SENTIMENT: pos=50, neg=30, neu=20]
+[POLITICAL_SENTIMENT: sl=25, ml=25, mr=25, sr=25]
 [SUSPICION: 30]
 [SUMMARY]
 통합 테스트 성공 리포트입니다.

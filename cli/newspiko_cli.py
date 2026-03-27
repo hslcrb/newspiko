@@ -33,21 +33,17 @@ class NewspikoCLI:
         self.current_news_list = []
         self.current_source = "naver"
         self.analysis_history = []  # 트렌드 분석용 히스토리 추가
-        self.auto_analyze = False   # 자동 분석 모드
-        self.last_analysis_text = "" # 마지막 분석 결과 저장용
 
     def print_help(self):
         print(f"\n{Fore.CYAN}=== Newspiko CLI 명령어 안내 ===")
         print(f"{Fore.WHITE}/naver             - 네이버 뉴스 랭킹 로드")
         print(f"{Fore.WHITE}/daum              - 다음 뉴스 랭킹 로드")
         print(f"{Fore.WHITE}/analyze <번호>    - 해당 번호 뉴스 AI 분석")
-        print(f"{Fore.WHITE}/trend             - 현재 세션 분석 트렌드 요약")
-        print(f"{Fore.WHITE}/save <파일명>      - 마지막 분석 결과를 텍스트 파일로 저장")
-        print(f"{Fore.WHITE}/auto              - 자동 분석 모드 토글 (선택 시 즉시 분석)")
+        print(f"{Fore.WHITE}/trend             - 현재 세션 분석 트렌드 보기")
         print(f"{Fore.WHITE}/export <번호> <명> - 댓글 데이터를 CSV로 내보내기")
-        print(f"{Fore.WHITE}/model <name>      - 분석 모델 변경")
-        print(f"{Fore.WHITE}/api <key>         - API 키 저장")
-        print(f"{Fore.WHITE}/help              - 도움말")
+        print(f"{Fore.WHITE}/model <name>      - 분석 모델 변경 (예: openai/gpt-oss-120b)")
+        print(f"{Fore.WHITE}/api <key>         - Groq API 키 저장")
+        print(f"{Fore.WHITE}/help              - 도움말 출력")
         print(f"{Fore.WHITE}/quit              - 종료")
 
     def list_news(self, source="naver"):
@@ -94,7 +90,6 @@ class NewspikoCLI:
 
         print(f"\n{Fore.CYAN}>>> AI 여론 분석 엔진 가동...")
         analysis = self.analyzer.analyze_opinion({'title': news['title'], 'content': details['content']}, comments)
-        self.last_analysis_text = analysis
         parsing_res = self.analyzer.parse_results(analysis)
         
         print(f"\n{Fore.WHITE}{analysis}")
@@ -103,8 +98,8 @@ class NewspikoCLI:
         print(f"- 주요 키워드: {', '.join(parsing_res['keywords'][:5])}")
         print(f"- AI 진단 지수: {parsing_res['suspicion']}/100")
         s = parsing_res['sentiment']
-        print(f"- 감성 분포:")
-        print(f"  {Fore.GREEN}[긍정: {s['pos']}%]{Style.RESET_ALL} | {Fore.WHITE}[관망: {s['neu']}%]{Style.RESET_ALL} | {Fore.RED}[부정: {s['neg']}%]{Style.RESET_ALL}")
+        print(f"- 정치 성향 분포:")
+        print(f"  {Fore.BLUE}◀ [강경 좌: {s['sl']}%] [온건 좌: {s['ml']}%]{Style.RESET_ALL} | {Fore.RED}[온건 우: {s['mr']}%] [강경 우: {s['sr']}%] ▶{Style.RESET_ALL}")
         
         # 히스토리에 기록
         self.analysis_history.append({
@@ -112,19 +107,6 @@ class NewspikoCLI:
             "sentiment": s,
             "suspicion": parsing_res['suspicion']
         })
-
-    def save_report(self, filename):
-        if not self.last_analysis_text:
-            print(f"{Fore.RED}저장할 분석 결과가 없습니다. 먼저 분석을 진행하세요.")
-            return
-
-        if not filename.endswith(".txt"): filename += ".txt"
-        try:
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(self.last_analysis_text)
-            print(f"{Fore.GREEN}>>> 리포트 저장 성공: {filename}")
-        except Exception as e:
-            print(f"{Fore.RED}파일 저장 중 오류: {e}")
 
     def export_csv(self, idx, filename):
         if not (0 <= idx < len(self.current_news_list)):
@@ -159,10 +141,10 @@ class NewspikoCLI:
         print(f"\n{Fore.CYAN}=== [현재 세션 분석 트렌드 요약] ===")
         for i, entry in enumerate(self.analysis_history, 1):
             s = entry['sentiment']
-            # 감성 우세 판단
-            pos = s['pos']
-            neg = s['neg']
-            lean = f"{Fore.GREEN}긍정({pos}%)" if pos > neg else f"{Fore.RED}부정({neg}%)" if neg > pos else f"{Fore.WHITE}중립"
+            # 성향 우세 판단
+            left = s['sl'] + s['ml']
+            right = s['mr'] + s['sr']
+            lean = f"{Fore.BLUE}좌향({left}%)" if left > right else f"{Fore.RED}우향({right}%)" if right > left else f"{Fore.WHITE}중립"
             
             print(f"{i:2}. {entry['title'][:30]}...")
             print(f"    - 성향: {lean} {Style.RESET_ALL}| 의심 지수: {entry['suspicion']}")
@@ -208,7 +190,7 @@ def main():
                     )
                     print(f"{Fore.CYAN}분석 모델이 변경되었습니다: {args[0]}")
                 else:
-                    current_model = cli.config_mgr.get("model", "openai/gpt-oss-120b")
+                    current_model = cli.config_mgr.get("model", "llama-3.3-70b-versatile")
                     print(f"{Fore.YELLOW}현재 모델: {current_model}")
             elif cmd == "/api":
                 if args:
@@ -219,26 +201,6 @@ def main():
                     )
                     print(f"{Fore.CYAN}API 키가 저장되었습니다.")
                 else: print(f"{Fore.RED}키를 입력하세요. 예: /api gsk_...")
-            elif cmd == "/save":
-                if args: cli.save_report(args[0])
-                else: print(f"{Fore.RED}파일명을 입력하세요. 예: /save my_report.txt")
-            elif cmd == "/auto":
-                cli.auto_analyze = not cli.auto_analyze
-                status = f"{Fore.GREEN}ON" if cli.auto_analyze else f"{Fore.RED}OFF"
-                print(f"{Fore.CYAN}자동 분석 모드: {status}")
-            elif cmd.isdigit():
-                # 숫자만 입력했을 때의 처리
-                idx = int(cmd) - 1
-                if cli.auto_analyze:
-                    cli.analyze_news(idx)
-                else:
-                    # 자동 모드가 아닐 때는 단순 선택 (추후 확장 가능)
-                    if 0 <= idx < len(cli.current_news_list):
-                        n = cli.current_news_list[idx]
-                        print(f"{Fore.YELLOW}[선택됨] {n['press']} - {n['title']}")
-                        print(f"분석하려면 '/analyze {cmd}' 를 입력하거나 '/auto'를 켜세요.")
-                    else:
-                        print(f"{Fore.RED}잘못된 번호입니다.")
             else:
                 print(f"{Fore.RED}알 수 없는 명령어입니다. /help를 확인하세요.")
         except Exception as e:

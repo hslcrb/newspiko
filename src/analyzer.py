@@ -1,16 +1,18 @@
 import os
 import re
 import json
-from openai import OpenAI
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class NewsAnalyzer:
-    def __init__(self, api_key=None, model="openai/gpt-oss-120b"):
-        self.api_key = api_key or os.getenv("GROQ_API_KEY") or os.getenv("OPENAI_API_KEY")
+    def __init__(self, api_key=None, model="llama-3.3-70b-versatile"):
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
         self.model = model
         self.client = None
+        if self.api_key:
+            self.client = Groq(api_key=self.api_key)
         
         self.system_message = """당신은 대한민국 뉴스 및 여론 분석 전문가입니다. 
 당신은 오직 분석 보고서만을 마크다운 형식으로 출력해야 하며, 서론이나 결론 등 잡담을 절대 섞지 마십시오.
@@ -18,38 +20,17 @@ class NewsAnalyzer:
 
 반드시 다음 태그를 포함하여 데이터를 규격화하십시오 (파싱 엔진에서 사용됨):
 1. 마인드맵: [KEYWORDS: ["키워드1", "키워드2", ...]]
-2. 감성 분석: [SENTIMENT: pos=XX, neg=XX, neu=XX] (합계 100)
-       - pos: Positive (긍정/찬성)
-       - neg: Negative (부정/반대)
-       - neu: Neutral (관망/중립)
+2. 정치 성향 분석: [POLITICAL_SENTIMENT: sl=XX, ml=XX, mr=XX, sr=XX] (합계 100)
+       - sl: Strong Left (강경 좌/진한 파랑)
+       - ml: Moderate Left (온건 좌/연한 파랑)
+       - mr: Moderate Right (온건 우/연한 빨강)
+       - sr: Strong Right (강경 우/진한 빨강)
 3. 진단 지수: [SUSPICION: XX] (0~100)"""
-
-    def _get_client(self):
-        if self.client:
-            return self.client
-        
-        if not self.api_key:
-            return None
-            
-        try:
-            # Groq 키인 경우 OpenAI 호환 엔드포인트 사용
-            if self.api_key.startswith("gsk_"):
-                self.client = OpenAI(
-                    api_key=self.api_key,
-                    base_url="https://api.groq.com/openai/v1"
-                )
-            else:
-                self.client = OpenAI(api_key=self.api_key)
-            return self.client
-        except Exception as e:
-            print(f"클라이언트 초기화 오류: {e}")
-            return None
 
     def analyze_opinion(self, article, comments, max_retries=3, status_callback=None):
         """뉴스 내용과 댓글을 분석하여 여론 리포트를 생성합니다. (자동 재시도 및 상태 콜백 포함)"""
-        client = self._get_client()
-        if not client:
-            return "API 키가 설정되지 않았습니다. 설정에서 입력해 주세요."
+        if not self.client:
+            return "Groq API 키가 설정되지 않았습니다. 설정에서 입력해 주세요."
         
         if not comments:
             return "분석할 댓글이 없습니다."
@@ -68,7 +49,7 @@ class NewsAnalyzer:
 분석 항목:
 1. 핵심 요약 (3줄 이내)
 2. 마인드맵 키워드 추출 (지정된 TAG 내 JSON 배열 형식)
-3. 감성 분석 (긍정/부정/관망 비율 산출)
+3. 정치 성향 분석 (좌/우 및 강경/온건 비율 산출)
 4. 여론조작 및 집단성 진단 (구체적 근거와 함께 SUSPICION 지수 제시)
 5. 전문가 통찰 (향후 전개 방향 및 여론 변화 가능성)
 """
@@ -84,7 +65,7 @@ class NewsAnalyzer:
                 if status_callback:
                     status_callback(f"AI 분석 시도 중... ({attempt + 1}/{max_retries})")
 
-                chat_completion = client.chat.completions.create(
+                chat_completion = self.client.chat.completions.create(
                     messages=[
                         {"role": "system", "content": self.system_message},
                         {"role": "user", "content": user_message}
@@ -103,7 +84,7 @@ class NewsAnalyzer:
                 if parsed["keywords"] and sum(parsed["sentiment"].values()) > 0:
                     return analysis_result
                 else:
-                    last_error_feedback = "필수 태그([KEYWORDS], [SENTIMENT], [SUSPICION]) 중 누락되었거나 형식이 잘못된 부분이 발견되었어."
+                    last_error_feedback = "필수 태그([KEYWORDS], [POLITICAL_SENTIMENT], [SUSPICION]) 중 누락되었거나 형식이 잘못된 부분이 발견되었어."
                     msg = f"[AI-RETRY] 시도 {attempt+1} 결과가 규격에 맞지 않습니다. 재시도합니다."
                     if status_callback: status_callback(msg)
                     print(msg) # Keep print for console visibility if callback not set
@@ -121,7 +102,7 @@ class NewsAnalyzer:
         """AI 응답 텍스트에서 구조화된 데이터를 추출합니다."""
         results = {
             "keywords": [],
-            "sentiment": {"pos": 0, "neg": 0, "neu": 0},
+            "sentiment": {"sl": 0, "ml": 0, "mr": 0, "sr": 0},
             "suspicion": 0
         }
         
@@ -135,13 +116,14 @@ class NewsAnalyzer:
                     raw_items = re.findall(r'"([^"]*)"', kw_match.group(1))
                     results["keywords"] = [item for item in raw_items if item.strip()]
                 
-            # 2. 감성 점수 추출
-            sent_match = re.search(r'\[SENTIMENT:\s*pos=(\d+),\s*neg=(\d+),\s*neu=(\d+)\]', text, re.IGNORECASE)
-            if sent_match:
+            # 2. 정치 성향 점수 추출
+            pol_match = re.search(r'\[POLITICAL_SENTIMENT:\s*sl=(\d+),\s*ml=(\d+),\s*mr=(\d+),\s*sr=(\d+)\]', text, re.IGNORECASE)
+            if pol_match:
                 results["sentiment"] = {
-                    "pos": int(sent_match.group(1)),
-                    "neg": int(sent_match.group(2)),
-                    "neu": int(sent_match.group(3))
+                    "sl": int(pol_match.group(1)),
+                    "ml": int(pol_match.group(2)),
+                    "mr": int(pol_match.group(3)),
+                    "sr": int(pol_match.group(4))
                 }
                 
             # 3. 의심 지수 추출

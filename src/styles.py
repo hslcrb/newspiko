@@ -11,9 +11,10 @@ def get_theme_css(theme="dark"):
             "--color-text-dim": "#94a3b8",
             "--color-accent": "#34d399",
             "--color-error": "#ef4444",
-            "--color-pos": "#10b981", # Positive (Emerald 500)
-            "--color-neg": "#ef4444", # Negative (Red 500)
-            "--color-neu": "#94a3b8", # Neutral (Slate 400)
+            "--color-sl": "#1e40af", # Strong Left
+            "--color-ml": "#60a5fa", # Moderate Left
+            "--color-mr": "#f87171", # Moderate Right
+            "--color-sr": "#b91c1c", # Strong Right
             "--color-scroll-bg": "#0f172a",
             "--color-scroll-handle": "#334155"
         }
@@ -29,9 +30,10 @@ def get_theme_css(theme="dark"):
             "--color-text-dim": "#334155",
             "--color-accent": "#059669",
             "--color-error": "#dc2626",
-            "--color-pos": "#059669",
-            "--color-neg": "#dc2626",
-            "--color-neu": "#64748b",
+            "--color-sl": "#1d4ed8",
+            "--color-ml": "#93c5fd",
+            "--color-mr": "#fca5a5",
+            "--color-sr": "#dc2626",
             "--color-agentic": "#8b5cf6",
             "--color-scroll-bg": "#f1f5f9",
             "--color-scroll-handle": "#94a3b8"

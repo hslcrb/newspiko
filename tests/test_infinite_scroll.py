@@ -4,8 +4,7 @@ import sys
 import os
 
 # 프로젝트 루트를 경로에 추가
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from crawler import NaverNewsCrawler
 from crawler_daum import DaumNewsCrawler
@@ -65,7 +64,7 @@ def test_daum_pagination_logic(daum_crawler):
 def test_infinite_scroll_state_management():
     """GUI 내 무한 스크롤 상태 전이 및 추가 로드 호출 로직 검증 (Logic only)"""
     from PyQt6.QtWidgets import QApplication
-    from src.main import ModernNewsApp
+    from main import ModernNewsApp
     
     app = QApplication([])
     window = ModernNewsApp()

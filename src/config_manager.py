@@ -58,7 +58,7 @@ class ConfigManager:
         default = {
             "groq_api_key": "",
             "theme": "dark",
-            "model": "openai/gpt-oss-120b",
+            "model": "llama-3.3-70b-versatile",
             "last_section": 100
         }
         self.save_config(default)

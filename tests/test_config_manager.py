@@ -38,7 +38,7 @@ def test_config_default_values():
     
     cm = ConfigManager(config_path=config_path, key_path=key_path)
     assert cm.get("theme") == "dark"
-    assert cm.get("model") == "openai/gpt-oss-120b"
+    assert cm.get("model") == "llama-3.3-70b-versatile"
     assert cm.get("last_section") == 100
     
     os.remove(config_path)
